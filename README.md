@@ -9,6 +9,8 @@ backyard, blow squares open, dig up moles and treasure, and cash out before you 
 - **PWA:** `vite-plugin-pwa` precaches everything; add to home screen on iOS/Android or install on desktop.
 - **Audio:** synthesized with the Web Audio API (pop, flak, mushroom cloud rumble, disco jingle).
 
+**Play it:** https://arifialkov.github.io/molesweeper/ (deployed by `.github/workflows/pages.yml` on every push).
+
 ## Run it
 
 ```bash
