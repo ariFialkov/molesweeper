@@ -1,0 +1,387 @@
+import * as THREE from 'three';
+import { Sfx } from './audio/sfx';
+import { ITEM_LABEL, LAYOUTS, type AmmoDef, type ItemType, type Layout } from './engine/config';
+import { Game, formatFactor, formatMoney, type ShotResult } from './engine/game';
+import { AimInput, type Pull } from './input/aim';
+import { Effects } from './scene/effects';
+import { disposeObject } from './scene/items';
+import { SceneManager } from './scene/scene';
+import { Slingshot } from './scene/slingshot';
+import { ease } from './scene/tween';
+import { Yard } from './scene/yard';
+import { Hud } from './ui/hud';
+import { Wallet } from './ui/wallet';
+
+const ITEM_EMOJI: Record<ItemType, string> = {
+  nothing: '🕳️',
+  grave: '⚰️',
+  mole: '🐹',
+  groundhog: '🦫',
+  treasure: '💎',
+  aqueduct: '🏛️',
+  oil: '🛢️',
+};
+
+/** ?seed=<hex> replays a specific backyard (the round number shown under the prize). */
+function seedFromUrl(): number | undefined {
+  const raw = new URLSearchParams(location.search).get('seed');
+  if (!raw) return undefined;
+  const v = parseInt(raw, 16);
+  return Number.isFinite(v) ? v >>> 0 : undefined;
+}
+
+export class App {
+  private sm: SceneManager;
+  private hud: Hud;
+  private sfx = new Sfx();
+  private wallet = new Wallet();
+  private effects: Effects;
+  private slingshot: Slingshot;
+  private aim: AimInput;
+  private game: Game | null = null;
+  private yard: Yard | null = null;
+  private busy = false;
+  private targetIndex = -1;
+  private targetPoint = new THREE.Vector3();
+  private reticle: THREE.Mesh;
+  private reticleMat: THREE.MeshBasicMaterial;
+  private trajectory: THREE.InstancedMesh;
+  private dummy = new THREE.Object3D();
+  private bestFactor = 1;
+
+  constructor(canvas: HTMLCanvasElement, hudRoot: HTMLElement) {
+    this.sm = new SceneManager(canvas);
+    this.effects = new Effects(this.sm, this.sfx);
+    this.slingshot = new Slingshot(this.sm.camera, this.sm.tweens);
+    this.sm.scene.add(this.sm.camera);
+
+    this.reticleMat = new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.9, depthWrite: false });
+    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.42, 32), this.reticleMat);
+    this.reticle.rotation.x = -Math.PI / 2;
+    this.reticle.position.y = 0.2;
+    this.reticle.visible = false;
+    this.reticle.renderOrder = 5;
+    this.sm.scene.add(this.reticle);
+
+    this.trajectory = new THREE.InstancedMesh(new THREE.SphereGeometry(0.045, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }), 16);
+    this.trajectory.visible = false;
+    this.trajectory.frustumCulled = false;
+    this.sm.scene.add(this.trajectory);
+
+    this.hud = new Hud(
+      hudRoot,
+      {
+        onStart: (ammo) => this.startRound(ammo),
+        onCashOut: () => this.cashOut(),
+        onToggleSound: () => {
+          this.sfx.unlock();
+          this.sfx.setMuted(!this.sfx.muted);
+          return !this.sfx.muted;
+        },
+        onResetWallet: () => {
+          this.wallet.reset();
+          this.hud.setBalance(this.wallet.balance);
+          this.hud.showLobby(this.wallet.balance);
+        },
+      },
+      !this.sfx.muted,
+    );
+    this.hud.setBalance(this.wallet.balance);
+
+    this.aim = new AimInput(canvas, {
+      onStart: () => this.onAimStart(),
+      onMove: (p) => this.onAimMove(p),
+      onRelease: (p) => this.onAimRelease(p),
+      onCancel: () => this.onAimCancel(),
+    });
+    window.addEventListener('pointerdown', () => this.sfx.unlock(), { once: true });
+    window.addEventListener('keydown', () => this.sfx.unlock(), { once: true });
+
+    this.sm.onUpdate((dt) => {
+      this.slingshot.update(dt);
+      this.yard?.update(dt);
+    });
+
+    // a first yard just for the lobby backdrop
+    this.showLobbyYard();
+    this.hud.showLobby(this.wallet.balance);
+    this.sm.start();
+  }
+
+  private pickLayout(): Layout {
+    return window.innerHeight > window.innerWidth ? LAYOUTS.portrait : LAYOUTS.landscape;
+  }
+
+  private showLobbyYard() {
+    const preview = new Game({ layout: this.pickLayout(), ammo: { id: 'firecracker', name: '', bet: 0, blurb: '', emoji: '' } });
+    this.buildYard(preview);
+  }
+
+  private buildYard(game: Game) {
+    if (this.yard) this.yard.dispose();
+    this.effects.clear();
+    this.yard = new Yard(game.board);
+    this.sm.scene.add(this.yard.group);
+    this.sm.fitTo(this.yard.bounds);
+  }
+
+  private startRound(ammo: AmmoDef) {
+    if (!this.wallet.canAfford(ammo.bet)) return;
+    this.sfx.unlock();
+    this.sfx.click();
+    this.wallet.debit(ammo.bet);
+    this.hud.setBalance(this.wallet.balance);
+    this.game = new Game({ layout: this.pickLayout(), ammo, seed: seedFromUrl() });
+    this.bestFactor = 1;
+    this.buildYard(this.game);
+    this.slingshot.setAmmo(ammo.id);
+    this.hud.showRound(this.roundView());
+    this.aim.enabled = true;
+    this.busy = false;
+  }
+
+  private roundView() {
+    const g = this.game!;
+    return { total: g.displayedTotal, shots: g.shots, mines: g.mineCount, canCashOut: g.canCashOut, bet: g.bet, ammo: g.ammo, seed: g.seed };
+  }
+
+  // ---------- aiming ----------
+
+  private onAimStart() {
+    if (!this.game || this.busy) return;
+    this.sfx.stretch();
+  }
+
+  private computeTarget(p: Pull) {
+    const y = this.yard!;
+    const b = y.bounds;
+    const cx = (b.minX + b.maxX) / 2;
+    const w = b.maxX - b.minX;
+    const d = b.maxZ - b.minZ;
+    const tx = cx - p.dx * (w / 2 + 0.2);
+    const tz = b.maxZ - 0.15 - Math.max(0, p.dy) * (d + 0.1) * 1.02;
+    this.targetPoint.set(tx, 0.2, tz);
+    this.targetIndex = y.cellFromPoint(tx, tz, 0.55);
+    if (this.targetIndex >= 0) {
+      const c = y.cellPosition(this.targetIndex);
+      this.targetPoint.set(c.x, 0.2, c.z);
+    }
+  }
+
+  private onAimMove(p: Pull) {
+    if (!this.game || !this.yard || this.busy) return;
+    this.slingshot.setPull(p.dx, p.dy, p.amount);
+    if (p.amount < 0.08) {
+      this.reticle.visible = false;
+      this.trajectory.visible = false;
+      this.hud.hideAim();
+      return;
+    }
+    this.computeTarget(p);
+    const g = this.game;
+    const i = this.targetIndex;
+    this.reticle.visible = i >= 0;
+    this.trajectory.visible = i >= 0;
+    if (i < 0) {
+      this.hud.hideAim();
+      return;
+    }
+    this.reticle.position.set(this.targetPoint.x, 0.2, this.targetPoint.z);
+    const kind = g.cellKind(i);
+    const pv = g.preview(i);
+    let color = 0xffd23f;
+    if (kind !== 'dirt') color = 0x8fd18a;
+    else if (g.isRevealed(i)) color = 0xbbbbbb;
+    else if (pv?.certainMine) color = 0xff3b3b;
+    else if (pv?.certainSafe) color = 0xc9e7c8;
+    else if (pv) color = new THREE.Color(0xffd23f).lerp(new THREE.Color(0xff3b3b), Math.min(1, pv.risk * 1.8)).getHex();
+    this.reticleMat.color.setHex(color);
+    this.drawTrajectory();
+    const screen = this.sm.toScreen(this.targetPoint.clone().add(new THREE.Vector3(0, 0.35, 0)));
+    this.hud.showAim(pv, kind !== 'dirt' ? kind : g.isRevealed(i) ? 'open' : 'dirt', screen.x, screen.y);
+  }
+
+  private drawTrajectory() {
+    const p0 = this.slingshot.pouchWorldPosition();
+    const p2 = this.targetPoint;
+    const n = this.trajectory.count;
+    for (let k = 0; k < n; k++) {
+      const t = (k + 1) / (n + 1);
+      const p = this.arcPoint(p0, p2, t);
+      this.dummy.position.copy(p);
+      const s = 0.6 + t * 0.6;
+      this.dummy.scale.setScalar(s);
+      this.dummy.updateMatrix();
+      this.trajectory.setMatrixAt(k, this.dummy.matrix);
+    }
+    this.trajectory.instanceMatrix.needsUpdate = true;
+  }
+
+  private arcPoint(p0: THREE.Vector3, p2: THREE.Vector3, t: number): THREE.Vector3 {
+    const dist = p0.distanceTo(p2);
+    const p1 = p0.clone().add(p2).multiplyScalar(0.5);
+    // a gentle lob: the apex sits between the pouch and the ground, never above the camera
+    p1.y = (p0.y + p2.y) / 2 + 0.6 + dist * 0.05;
+    const a = p0.clone().multiplyScalar((1 - t) * (1 - t));
+    const b = p1.clone().multiplyScalar(2 * (1 - t) * t);
+    const c = p2.clone().multiplyScalar(t * t);
+    return a.add(b).add(c);
+  }
+
+  private onAimCancel() {
+    this.slingshot.release();
+    this.reticle.visible = false;
+    this.trajectory.visible = false;
+    this.hud.hideAim();
+  }
+
+  private onAimRelease(p: Pull) {
+    if (!this.game || !this.yard || this.busy) {
+      this.onAimCancel();
+      return;
+    }
+    this.computeTarget(p);
+    const i = this.targetIndex;
+    this.onAimCancel();
+    if (i < 0) return;
+    const pv = this.game.preview(i);
+    if (pv?.certainMine) {
+      this.sfx.thud();
+      this.hud.toast("💣 That's a proven mine. The game won't let you throw your prize away.", 'bad');
+      return;
+    }
+    void this.fire(i);
+  }
+
+  // ---------- firing ----------
+
+  private async fire(index: number) {
+    const g = this.game!;
+    const yard = this.yard!;
+    this.busy = true;
+    this.aim.enabled = false;
+    this.sfx.launch();
+    this.slingshot.hideAmmo();
+
+    const projectile = this.slingshot.spawnProjectile();
+    this.sm.scene.add(projectile);
+    const p0 = this.slingshot.pouchWorldPosition();
+    const p2 = yard.cellPosition(index).setY(0.25);
+    if (g.cellKind(index) !== 'dirt') p2.y = 0.7;
+    const dist = p0.distanceTo(p2);
+    const duration = 0.42 + dist * 0.035;
+    const isRocket = g.ammo.id === 'icbm';
+    if (isRocket) this.sfx.whistle(duration);
+    const prev = p0.clone();
+    await this.sm.tweens.run(
+      duration,
+      (t) => {
+        const p = this.arcPoint(p0, p2, t);
+        if (isRocket) {
+          const dir = p.clone().sub(prev);
+          if (dir.lengthSq() > 1e-8) projectile.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+          prev.copy(p);
+        } else {
+          projectile.rotation.x += 0.25;
+          projectile.rotation.z += 0.18;
+        }
+        projectile.position.copy(p);
+      },
+      ease.linear,
+    );
+    projectile.removeFromParent();
+    disposeObject(projectile);
+
+    const result = g.fire(index);
+    await this.handleResult(result);
+
+    this.slingshot.reload();
+    this.busy = false;
+    if (!g.isOver) this.aim.enabled = true;
+  }
+
+  private async handleResult(res: ShotResult) {
+    const g = this.game!;
+    const yard = this.yard!;
+    const pos = yard.cellPosition(res.index);
+    switch (res.kind) {
+      case 'dead':
+        this.effects.burnMark(yard, res.index, g.ammo.id);
+        this.hud.toast(res.cell === 'tree' ? '🌳 Ouch, the tree. Nothing under it.' : '🪨 Solid rock. Nothing under it.', 'info', 1.6);
+        return;
+      case 'already':
+        this.effects.dud(pos);
+        return;
+      case 'certain-mine':
+        this.hud.toast("💣 That's a proven mine.", 'bad');
+        return;
+      case 'mine': {
+        this.effects.impact(g.ammo.id, pos);
+        await this.effects.mineExplosion(yard, res.index);
+        this.hud.updateRound(this.roundView());
+        this.sfx.lose();
+        this.hud.setBalance(this.wallet.balance);
+        this.hud.showResult({ kind: 'bust', amount: 0, bet: g.bet, shots: g.shots, best: this.bestFactor }, () => this.backToLobby());
+        return;
+      }
+      case 'safe': {
+        this.effects.impact(g.ammo.id, pos);
+        await this.effects.openCrater(yard, res.index, res.number);
+        if (res.cascade.length) void this.effects.cascade(yard, res.cascade);
+        this.hud.updateRound(this.roundView());
+        this.bestFactor = Math.max(this.bestFactor, res.factor);
+        void this.effects.revealItem(yard, res.index, res.item, res.gain, res.factor, g.ammo.id, g.shots);
+        this.toastFor(res);
+        if (res.autoCashout) {
+          await this.sm.tweens.delay(1.2);
+          this.hud.toast('🏡 Backyard cleared! Paying out.', 'win');
+          this.finishCashout();
+        }
+        return;
+      }
+    }
+  }
+
+  private toastFor(res: Extract<ShotResult, { kind: 'safe' }>) {
+    const em = ITEM_EMOJI[res.item];
+    switch (res.item) {
+      case 'nothing':
+        this.hud.toast(`${em} Nothing here. Safe, but free info only.`, 'info', 1.8);
+        break;
+      case 'grave':
+        this.hud.toast(`${em} Secret grave: we're just gonna ignore this one. +$0.00`, 'grave', 3.5);
+        break;
+      case 'aqueduct':
+      case 'oil':
+        this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! Prize ${formatFactor(res.factor)} → ${formatMoney(res.totalAfter)}`, 'win', 3);
+        break;
+      default:
+        this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! +${formatMoney(res.gain)}`, 'win');
+    }
+    if (res.cascade.length) this.hud.toast(`✨ Zero! ${res.cascade.length} squares opened for free.`, 'info', 2);
+  }
+
+  private cashOut() {
+    if (!this.game || !this.game.canCashOut || this.busy) return;
+    this.game.cashOut();
+    this.finishCashout();
+  }
+
+  private finishCashout() {
+    const g = this.game!;
+    this.aim.enabled = false;
+    const paid = g.payout;
+    this.wallet.credit(paid);
+    this.hud.setBalance(this.wallet.balance);
+    this.sfx.cashout();
+    this.hud.updateRound(this.roundView());
+    this.hud.showResult({ kind: 'cashout', amount: paid, bet: g.bet, shots: g.shots, best: this.bestFactor }, () => this.backToLobby());
+  }
+
+  private backToLobby() {
+    this.game = null;
+    this.aim.enabled = false;
+    this.showLobbyYard();
+    this.hud.showLobby(this.wallet.balance);
+  }
+}
