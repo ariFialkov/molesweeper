@@ -182,13 +182,6 @@ button.icon .ico {
   align-items: center;
   gap: 6px;
 }
-.logo small {
-  font-size: 11px;
-  color: var(--cream);
-  opacity: 0.8;
-  text-shadow: none;
-  font-weight: 700;
-}
 .spacer {
   flex: 1;
 }
@@ -479,7 +472,6 @@ button.icon .ico {
   .logo {
     font-size: 18px;
   }
-  .logo small,
   .logo .word {
     display: none;
   }

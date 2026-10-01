@@ -44,7 +44,7 @@ export class Hud {
   ) {
     root.insertAdjacentHTML('afterbegin', iconSprite());
     const top = el('div', 'topbar');
-    top.append(el('div', 'logo', `${icon('firecracker')}<span class="word">MOLESWEEPER</span> <small>3D · stepper</small>`));
+    top.append(el('div', 'logo', `${icon('firecracker')}<span class="word">MOLESWEEPER</span>`));
     top.append(el('div', 'spacer'));
     this.minesPill = el('div', 'pill mines', '');
     this.minesPill.style.display = 'none';
