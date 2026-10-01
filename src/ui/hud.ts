@@ -205,7 +205,7 @@ export class Hud {
           <li>🦫 Groundhog: a third of your bet and up</li>
           <li>💎 Buried treasure: your whole bet and up</li>
           <li>🏛️ Aqueduct: multiplies your whole prize x2 to x25</li>
-          <li>🛢️ Oil seep: x50 and beyond. Legendary.</li>
+          <li>🛢️ Oil seep: can strike on any safe shot. x50, x75 or x100 on the whole prize. Legendary.</li>
           <li>⚰️ Secret grave: worth nothing, but worth seeing.</li>
         </ul>
         <h3>The fairness bit</h3>

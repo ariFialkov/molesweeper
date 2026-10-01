@@ -26,7 +26,7 @@ const strategies: Strategy[] = [
   { name: 'never leave', pick: (g, r) => hidden(g)[Math.floor(r() * hidden(g).length)]! },
 ];
 
-for (const layout of [LAYOUTS.landscape, LAYOUTS.portrait]) {
+for (const layout of [LAYOUTS.portrait]) {
   console.log(`\n=== ${layout.cols}x${layout.rows}, ${rounds} rounds per strategy, bet $${ammo.bet}, target RTP ${RTP} ===`);
   for (const s of strategies) {
     const rng = mulberry32(12345);
@@ -34,6 +34,7 @@ for (const layout of [LAYOUTS.landscape, LAYOUTS.portrait]) {
     let busts = 0;
     let shots = 0;
     let maxX = 0;
+    let seeps = 0;
     const items: Record<string, number> = {};
     for (let r = 0; r < rounds; r++) {
       const g = new Game({ layout, ammo, seed: (rng() * 4294967296) >>> 0 });
@@ -44,7 +45,10 @@ for (const layout of [LAYOUTS.landscape, LAYOUTS.portrait]) {
           break;
         }
         const res = g.fire(m);
-        if (res.kind === 'safe') items[res.item] = (items[res.item] ?? 0) + 1;
+        if (res.kind === 'safe') {
+          items[res.item] = (items[res.item] ?? 0) + 1;
+          if (res.oilMultiplier) seeps++;
+        }
       }
       shots += g.shots;
       if (g.phase === 'busted') busts++;
@@ -59,7 +63,7 @@ for (const layout of [LAYOUTS.landscape, LAYOUTS.portrait]) {
       .map(([k, v]) => `${k}:${v}`)
       .join(' ');
     console.log(
-      `${s.name.padEnd(22)} RTP ${(rtp * 100).toFixed(2)}%  bust ${((busts / rounds) * 100).toFixed(1)}%  avg shots ${(shots / rounds).toFixed(2)}  best ${maxX.toFixed(1)}x  [${itemStr}]`,
+      `${s.name.padEnd(22)} RTP ${(rtp * 100).toFixed(2)}%  bust ${((busts / rounds) * 100).toFixed(1)}%  avg shots ${(shots / rounds).toFixed(2)}  best ${maxX.toFixed(1)}x  seeps ${seeps} (1 per ${seeps ? Math.round(rounds / seeps) : '-'} rounds)  [${itemStr}]`,
     );
   }
 }

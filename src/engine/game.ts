@@ -1,5 +1,5 @@
 import { generateBoard, type Board, type CellKind } from './board';
-import { GRAVE_CHANCE, ITEM_RULES, NUMBER_SHOW_CHANCE, RTP, type AmmoDef, type ItemType, type Layout } from './config';
+import { GRAVE_CHANCE, ITEM_RULES, NUMBER_SHOW_CHANCE, OIL_SEEP, RTP, oilShave, type AmmoDef, type ItemType, type Layout } from './config';
 import { mulberry32, randomSeed, type Rng } from './rng';
 import { solve } from './solver';
 
@@ -36,6 +36,8 @@ export type ShotResult =
       /** false: the dirt is unreadable, the number is not shown */
       shown: boolean;
       item: ItemType;
+      /** 50 / 75 / 100 when the oil seep struck on this shot, else 0 */
+      oilMultiplier: number;
       risk: number;
       factor: number;
       gain: number;
@@ -58,6 +60,10 @@ export interface GameOptions {
   board?: Board;
   /** override NUMBER_SHOW_CHANCE (simulations) */
   numberShowChance?: number;
+  /** override the oil seep chance (0 disables it, 1 strikes every time; both keep the RTP exact) */
+  oilChance?: number;
+  oilMultipliers?: number[];
+  oilWeights?: number[];
 }
 
 /**
@@ -88,6 +94,13 @@ export class Game {
   /** opened squares whose number is readable */
   shown: boolean[];
   readonly numberShowChance: number;
+  readonly oilChance: number;
+  readonly oilMultipliers: number[];
+  readonly oilWeights: number[];
+  /** ordinary gains are multiplied by this to fund the oil seep */
+  readonly shave: number;
+  /** separate stream for the seep so the draw never depends on how the board unfolded */
+  private oilRng: Rng;
   /** ticket value (what a cash-out pays) */
   total: number;
   shots = 0;
@@ -107,6 +120,13 @@ export class Game {
     this.flagged = new Array(this.board.n).fill(false);
     this.shown = new Array(this.board.n).fill(false);
     this.numberShowChance = opts.numberShowChance ?? NUMBER_SHOW_CHANCE;
+    this.oilChance = opts.oilChance ?? OIL_SEEP.chance;
+    this.oilMultipliers = opts.oilMultipliers ?? OIL_SEEP.multipliers;
+    this.oilWeights = opts.oilWeights ?? OIL_SEEP.weights;
+    const w = this.oilWeights.reduce((a, b) => a + b, 0);
+    const expectedK = this.oilMultipliers.reduce((acc, m, i) => acc + (m * this.oilWeights[i]!) / w, 0);
+    this.shave = oilShave(this.oilChance, expectedK);
+    this.oilRng = mulberry32((this.seed ^ 0x6f1c5eed) >>> 0);
     this.total = this.bet * this.rtp;
     this.probs = this.computeProbs();
   }
@@ -194,7 +214,7 @@ export class Game {
     if (!this.isHidden(index)) return null;
     const risk = this.probs[index]!;
     const before = this.shots === 0 ? this.bet : this.total;
-    const totalAfter = risk >= 1 ? 0 : this.total / (1 - risk);
+    const totalAfter = risk >= 1 ? 0 : (this.total * this.shave) / (1 - risk);
     const gain = Math.max(0, totalAfter - before);
     const factor = before > 0 ? totalAfter / before : 1;
     return {
@@ -230,12 +250,13 @@ export class Game {
 
     const risk = this.probs[index]!;
     const totalBefore = this.shots === 1 ? this.bet : this.total;
-    const totalAfter = this.total / (1 - risk);
+    const oilMultiplier = this.drawOil();
+    const totalAfter = (this.total * this.shave * (oilMultiplier || 1)) / (1 - risk);
     const gain = Math.max(0, totalAfter - totalBefore);
     const factor = totalBefore > 0 ? totalAfter / totalBefore : 1;
     this.total = totalAfter;
 
-    let item = classifyItem(gain, factor, this.bet);
+    let item: ItemType = oilMultiplier ? 'oil' : classifyItem(gain, factor, this.bet);
     if (item === 'nothing' && !this.graveUsed && this.rng() < GRAVE_CHANCE) {
       item = 'grave';
       this.graveUsed = true;
@@ -258,6 +279,7 @@ export class Game {
       number: this.board.numbers[index]!,
       shown: this.shown[index]!,
       item,
+      oilMultiplier,
       risk,
       factor,
       gain,
@@ -269,6 +291,19 @@ export class Game {
     };
     this.history.push(res);
     return res;
+  }
+
+  /** One draw per safe shot: 0, or one of the seep multipliers. */
+  private drawOil(): number {
+    const u = this.oilRng();
+    if (u >= this.oilChance) return 0;
+    // reuse the same uniform, rescaled, to pick the multiplier
+    let v = (u / this.oilChance) * this.oilWeights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < this.oilMultipliers.length; i++) {
+      v -= this.oilWeights[i]!;
+      if (v <= 0) return this.oilMultipliers[i]!;
+    }
+    return this.oilMultipliers[this.oilMultipliers.length - 1]!;
   }
 
   /**
@@ -322,7 +357,6 @@ export class Game {
 
 export function classifyItem(gain: number, factor: number, bet: number): ItemType {
   if (gain < 0.005) return 'nothing';
-  if (factor >= ITEM_RULES.oilMinFactor) return 'oil';
   if (factor >= ITEM_RULES.aqueductMinFactor) return 'aqueduct';
   const g = gain / bet;
   if (g >= ITEM_RULES.treasureMinGain) return 'treasure';

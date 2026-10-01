@@ -49,7 +49,7 @@ What you can dig up (the skin is chosen by what the shot paid):
 | 🦫 Groundhog | adds 0.35×–1× bet | about 25 % of safe shots |
 | 💎 Buried treasure | adds 1× bet and up | about 5 % of safe shots, big pots |
 | 🏛️ Aqueduct | multiplies the prize ×2–×25 | squares with ≥ 50 % mine risk |
-| 🛢️ Oil seep | multiplies ×50 and beyond | squares with ≥ 98 % risk (legendary) |
+| 🛢️ Oil seep | multiplies ×50 / ×75 / ×100 | a jackpot that can strike on any safe shot, ~1 round in 500 |
 | ⚰️ Secret grave | +$0.00, coffin bursts, mummy flies | 10 % of squares the game opens for free, max 1 per yard |
 | 🌳🪨 Trees & rocks | dead squares, burn mark on hit | 3–7 per yard |
 
@@ -88,6 +88,12 @@ Consequences that shape the design:
   `NUMBER_SHOW_CHANCE` (0.25); squares the game opens for free always do. The flip is seeded and never
   looks at the value, so a missing number carries no information; the solver simply treats that square
   as safe with an unknown count. `scripts/tune-numbers.ts` shows the trade-off.
+- **The oil seep is a funded jackpot.** Each safe shot has a small chance `OIL_SEEP.chance` of also
+  striking oil, multiplying the pot by 50, 75 or 100. Every ordinary gain is multiplied by
+  `shave = 1 / (1 + chance × (E[K] − 1))` so that `E[step] = V` still holds exactly: the martingale, and
+  therefore the 96 % for every strategy, is untouched. At the default rate ordinary prizes are about
+  3 % smaller in expectation per shot (moles roughly 15 % smaller). The draw comes from its own seeded
+  stream so it never depends on how the board unfolded.
 - **Item skins are cosmetic**, chosen from what the shot paid (`ITEM_RULES`), so their frequency can be
   retuned freely without touching the RTP. `scripts/tune-items.ts` prints the prize distribution.
 - Item types are cosmetic: mole / groundhog / treasure by how much the shot added, aqueduct / oil seep

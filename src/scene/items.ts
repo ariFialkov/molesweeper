@@ -89,35 +89,23 @@ export function makeTreasure(): THREE.Group {
   return g;
 }
 
-/** Mini stone aqueduct: two arches with a water channel. */
-export function makeAqueduct(): THREE.Group {
+/** A puddle left by a geyser: shimmering blue water (aqueduct) or thick glossy oil. */
+export function makePuddle(oil: boolean): THREE.Group {
   const g = new THREE.Group();
-  const stone = std(0xc9b79a, { roughness: 0.95 });
-  const water = new THREE.MeshStandardMaterial({ color: 0x3fa9ff, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85, emissive: 0x1a5aa0, emissiveIntensity: 0.3 });
-  const pillar = new THREE.BoxGeometry(0.1, 0.42, 0.12);
-  for (const x of [-0.3, 0, 0.3]) g.add(mesh(pillar, stone, x, 0.21, 0));
-  const archGeo = new THREE.TorusGeometry(0.11, 0.045, 8, 14, Math.PI);
-  for (const x of [-0.15, 0.15]) {
-    const a = mesh(archGeo, stone, x, 0.32, 0);
-    g.add(a);
-  }
-  g.add(mesh(new THREE.BoxGeometry(0.72, 0.09, 0.16), stone, 0, 0.47, 0));
-  const wm = mesh(new THREE.BoxGeometry(0.66, 0.04, 0.09), water, 0, 0.53, 0);
-  wm.name = 'water';
-  g.add(wm);
-  return g;
-}
-
-/** Oil seep: a black puddle and a derrick-like spout. Geyser particles are added by effects. */
-export function makeOilSeep(): THREE.Group {
-  const g = new THREE.Group();
-  const oil = std(0x0a0a0c, { roughness: 0.15, metalness: 0.6 });
-  const puddle = mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.03, 24), oil, 0, 0.015, 0);
+  const mat = oil
+    ? new THREE.MeshStandardMaterial({ color: 0x07070a, roughness: 0.08, metalness: 0.75, transparent: true, opacity: 0.97 })
+    : new THREE.MeshStandardMaterial({ color: 0x3aa8ff, roughness: 0.12, metalness: 0.15, transparent: true, opacity: 0.88, emissive: 0x1a5aa0, emissiveIntensity: 0.35 });
+  const puddle = mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.05, 28), mat, 0, 0.025, 0);
   puddle.name = 'puddle';
   g.add(puddle);
-  const pipe = std(0x555555, { metalness: 0.6, roughness: 0.4 });
-  g.add(mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.32, 10), pipe, 0, 0.16, 0));
-  g.add(mesh(new THREE.TorusGeometry(0.07, 0.02, 6, 12), pipe, 0, 0.3, 0).rotateX(Math.PI / 2));
+  const ringMat = new THREE.MeshBasicMaterial({ color: oil ? 0x3a3a44 : 0xd8f1ff, transparent: true, opacity: 0.5, depthWrite: false });
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.12, 28), ringMat.clone());
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.055;
+    ring.name = `ripple${i}`;
+    g.add(ring);
+  }
   return g;
 }
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Sfx } from '../audio/sfx';
 import { ITEM_LABEL, type AmmoId, type ItemType } from '../engine/config';
 import { formatFactor, formatMoney } from '../engine/game';
-import { disposeObject, makeAqueduct, makeCoffin, makeGroundhog, makeMine, makeMole, makeMummy, makeOilSeep, makeTreasure } from './items';
+import { disposeObject, makeCoffin, makeGroundhog, makeMine, makeMole, makeMummy, makePuddle, makeTreasure } from './items';
 import type { SceneManager } from './scene';
 import { burnTexture, makeLabel } from './text';
 import { ease } from './tween';
@@ -14,6 +14,8 @@ const FIRE = [0xff6b00, 0xffb300, 0xff3d00, 0xffe066];
 const SMOKE = [0x4a4a4a, 0x2f2f2f, 0x6b6b6b];
 const GRASS = [0x5fae4a, 0x3f8a33, 0x7cc95e];
 const CONFETTI = [0xff4d6d, 0xffd23f, 0x3bceac, 0x0ead69, 0x4d96ff, 0xc77dff, 0xffffff];
+const WATER = [0x3aa8ff, 0x8fd3ff, 0xd8f1ff, 0xffffff];
+const OIL = [0x07070a, 0x151518, 0x26262c, 0x0b0b10];
 const WOOD = [0x5d3b22, 0x7a4a2a, 0x3e2614];
 
 function setOpacity(obj: THREE.Object3D, opacity: number) {
@@ -280,7 +282,7 @@ export class Effects {
    * leaves again (moles burrow, chests sink, pumps run dry) and, if this square is readable,
    * the number it was hiding fades into the crater floor.
    */
-  async revealItem(yard: Yard, index: number, item: ItemType, gain: number, factor: number, ammo: AmmoId, shotNumber: number, numberAfter: number | null): Promise<void> {
+  async revealItem(yard: Yard, index: number, item: ItemType, gain: number, factor: number, ammo: AmmoId, shotNumber: number, numberAfter: number | null, oilMultiplier = 0): Promise<void> {
     const pos = yard.cellPosition(index);
     let obj: THREE.Group | null = null;
     switch (item) {
@@ -294,11 +296,12 @@ export class Effects {
         obj = makeTreasure();
         break;
       case 'aqueduct':
-        obj = makeAqueduct();
+      case 'oil': {
+        const oil = item === 'oil';
+        await this.geyser(pos, oil);
+        obj = makePuddle(oil);
         break;
-      case 'oil':
-        obj = makeOilSeep();
-        break;
+      }
       case 'grave':
         await this.graveSequence(yard, index);
         if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
@@ -309,8 +312,9 @@ export class Effects {
         return;
     }
     yard.placeItem(index, obj);
+    const puddle = item === 'aqueduct' || item === 'oil';
     obj.scale.setScalar(0.01);
-    obj.position.y = -0.3;
+    obj.position.y = puddle ? 0.1 : -0.3;
     if (item === 'mole' || item === 'groundhog') this.sfx.squeak();
     if (item === 'treasure') this.sfx.fanfare();
     if (item === 'aqueduct') this.sfx.coin(2);
@@ -318,40 +322,36 @@ export class Effects {
     const finalY = 0.1;
     const o = obj;
     void this.tw.run(
-      0.45,
+      puddle ? 0.7 : 0.45,
       (k) => {
         o.scale.setScalar(k);
-        o.position.y = -0.3 + (finalY + 0.3) * k;
+        if (!puddle) o.position.y = -0.3 + (finalY + 0.3) * k;
       },
-      ease.outBack,
+      puddle ? ease.outCubic : ease.outBack,
     );
     const label =
-      item === 'aqueduct' || item === 'oil' ? `${formatFactor(factor)}` : `+${formatMoney(gain)}`;
+      item === 'oil' ? `×${oilMultiplier}` : item === 'aqueduct' ? `${formatFactor(factor)}` : `+${formatMoney(gain)}`;
     const sub =
       item === 'aqueduct' || item === 'oil' ? `${ITEM_LABEL[item]} · +${formatMoney(gain)}` : ITEM_LABEL[item];
     this.floatingText(pos, label, { sub, color: item === 'oil' ? '#7cf5ff' : item === 'aqueduct' ? '#8fd3ff' : item === 'treasure' ? '#ffd84d' : '#ffe58a' });
     this.sfx.coin(shotNumber);
 
     // ambient item behaviour
-    if (item === 'aqueduct') {
-      const water = obj.getObjectByName('water') as THREE.Mesh | undefined;
-      if (water) {
-        const mat = water.material as THREE.MeshStandardMaterial;
-        this.tw.loop((_dt, el) => {
-          if (!o.parent) return false;
-          mat.emissiveIntensity = 0.3 + Math.sin(el * 6) * 0.2;
-          return true;
-        });
-        this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.6, 0)), count: 30, colors: [0x66ccff, 0xaee8ff], speed: [1, 3], spread: 0.8, gravity: 8, life: [0.4, 0.9], size: [0.03, 0.06] });
-      }
-    }
-    if (item === 'oil') {
+    if (puddle) {
+      const oil = item === 'oil';
+      const ripples = [0, 1, 2].map((i) => o.getObjectByName(`ripple${i}`) as THREE.Mesh);
       this.tw.loop((_dt, el) => {
-        if (!o.parent || el > 6) return false;
-        this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.35, 0)), count: 4, colors: [0x0a0a0c, 0x1a1a1e, 0x2b2b30], speed: [6, 9], direction: new THREE.Vector3(0, 1, 0), spread: 0.15, gravity: 14, life: [0.6, 1.2], size: [0.05, 0.1] });
+        if (!o.parent) return false;
+        ripples.forEach((r, i) => {
+          const t = ((el * (oil ? 0.35 : 0.6) + i / 3) % 1);
+          r.scale.setScalar(0.3 + t * 2.6);
+          (r.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - t);
+        });
+        if (oil && Math.random() < 0.08) {
+          this.particles.burst({ position: pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.1, (Math.random() - 0.5) * 0.4)), count: 2, colors: OIL, speed: [0.6, 1.4], direction: new THREE.Vector3(0, 1, 0), spread: 0.3, gravity: 9, life: [0.3, 0.6], size: [0.04, 0.08] });
+        }
         return true;
       });
-      this.sm.addShake(0.08);
     }
     if (item === 'treasure') {
       this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.4, 0)), count: 40, colors: [0xffd23f, 0xfff3a0, 0xffffff], speed: [1.5, 4], spread: 0.8, gravity: 5, life: [0.5, 1.2], size: [0.03, 0.07] });
@@ -362,10 +362,63 @@ export class Effects {
       this.dance(o, 2.4);
       linger = 2.6;
     }
-    if (item === 'oil') linger = 5.5;
+    if (item === 'aqueduct') linger = 3.2;
+    if (item === 'oil') linger = 5;
     await this.tw.delay(linger);
     await this.leave(yard, index, o, item);
     if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
+  }
+
+  /** A column of water or oil erupts from the crater, hangs, then rains down. */
+  private async geyser(pos: THREE.Vector3, oil: boolean): Promise<void> {
+    const colors = oil ? OIL : WATER;
+    const height = oil ? 3.4 : 2.8;
+    const jetMat = new THREE.MeshStandardMaterial({
+      color: oil ? 0x0a0a0e : 0x6cc3ff,
+      roughness: oil ? 0.1 : 0.2,
+      metalness: oil ? 0.6 : 0.1,
+      transparent: true,
+      opacity: oil ? 0.95 : 0.7,
+      emissive: oil ? 0x000000 : 0x1a5aa0,
+      emissiveIntensity: 0.3,
+    });
+    const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 1, 14, 1, true), jetMat);
+    jet.position.copy(pos);
+    this.scene.add(jet);
+    if (oil) this.sfx.nuke();
+    else this.sfx.flak();
+    this.sm.addShake(oil ? 0.25 : 0.12);
+    const duration = oil ? 2.2 : 1.7;
+    let emitted = 0;
+    await this.tw.run(duration, (t, dt) => {
+      // rise fast, hold, collapse
+      const h = t < 0.25 ? ease.outCubic(t / 0.25) : t < 0.7 ? 1 : 1 - ease.inQuad((t - 0.7) / 0.3);
+      const H = Math.max(0.01, h * height);
+      jet.scale.set(1 + Math.sin(t * 40) * 0.08, H, 1 + Math.cos(t * 37) * 0.08);
+      jet.position.y = pos.y + H / 2;
+      jetMat.opacity = (oil ? 0.95 : 0.7) * Math.min(1, h * 1.5);
+      emitted += dt;
+      if (emitted > 0.03 && t < 0.72) {
+        emitted = 0;
+        this.particles.burst({
+          position: pos.clone().add(new THREE.Vector3(0, H, 0)),
+          count: oil ? 6 : 8,
+          colors,
+          speed: oil ? [1, 3.5] : [1.5, 4.5],
+          direction: new THREE.Vector3(0, 1, 0),
+          spread: 0.7,
+          gravity: oil ? 9 : 12,
+          life: [0.6, 1.3],
+          size: oil ? [0.07, 0.14] : [0.04, 0.09],
+          fade: true,
+        });
+      }
+    });
+    jet.removeFromParent();
+    disposeObject(jet);
+    // the splash-down
+    this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.2, 0)), count: oil ? 50 : 60, colors, speed: [1, 3], direction: new THREE.Vector3(0, 1, 0), spread: 0.9, gravity: 12, life: [0.3, 0.8], size: oil ? [0.05, 0.1] : [0.03, 0.07] });
+    this.sfx.dirt();
   }
 
   /** The prize goes back where it came from. */
@@ -386,8 +439,14 @@ export class Effects {
         },
         ease.inQuad,
       );
+    } else if (item === 'aqueduct' || item === 'oil') {
+      // the puddle soaks into the ground
+      await this.tw.run(0.9, (k) => {
+        obj.scale.set(1 - k * 0.9, 1 - k, 1 - k * 0.9);
+        setOpacity(obj, 1 - k);
+      });
     } else {
-      // chest, aqueduct, derrick: the yard swallows it back
+      // the chest sinks back into the ground
       this.sfx.thud();
       this.particles.burst({ position: pos, count: 14, colors: DIRT, speed: [0.8, 2], direction: new THREE.Vector3(0, 1, 0), spread: 0.8, gravity: 12, life: [0.3, 0.6], size: [0.03, 0.06] });
       await this.tw.run(0.6, (k) => (obj.position.y = y0 - 0.9 * k), ease.inQuad);

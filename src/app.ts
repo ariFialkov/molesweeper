@@ -317,7 +317,7 @@ export class App {
             .then(() => this.hud.updateRound(this.roundView()));
         }
         this.bestFactor = Math.max(this.bestFactor, res.factor);
-        void this.effects.revealItem(yard, res.index, res.item, res.gain, res.factor, g.ammo.id, g.shots, res.shown ? res.number : null);
+        void this.effects.revealItem(yard, res.index, res.item, res.gain, res.factor, g.ammo.id, g.shots, res.shown ? res.number : null, res.oilMultiplier);
         this.toastFor(res);
         if (res.autoCashout) {
           await this.sm.tweens.delay(1.2);
@@ -339,8 +339,10 @@ export class App {
         this.hud.toast(`${em} Secret grave: we're just gonna ignore this one. +$0.00`, 'grave', 3.5);
         break;
       case 'aqueduct':
-      case 'oil':
         this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! Prize ${formatFactor(res.factor)} → ${formatMoney(res.totalAfter)}`, 'win', 3);
+        break;
+      case 'oil':
+        this.hud.toast(`${em} OIL SEEP ×${res.oilMultiplier}! Prize → ${formatMoney(res.totalAfter)}`, 'win', 5);
         break;
       default:
         this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! +${formatMoney(res.gain)}`, 'win');

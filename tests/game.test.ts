@@ -61,8 +61,8 @@ const strategies: Record<string, Strategy> = {
   },
 };
 
-function play(board: Board, strategy: Strategy): number {
-  const g = new Game({ layout: board.layout, ammo, board, seed: 1 });
+function play(board: Board, strategy: Strategy, oil: { oilChance: number; oilMultipliers?: number[]; oilWeights?: number[] } = { oilChance: 0 }): number {
+  const g = new Game({ layout: board.layout, ammo, board, seed: 1, ...oil });
   while (!g.isOver) {
     const move = strategy(g);
     if (move === 'cashout') {
@@ -90,6 +90,16 @@ describe('Game fairness', () => {
       expect(rtp).toBeCloseTo(RTP, 9);
     });
   }
+
+  it('stays exact with the oil seep striking on every shot (the shave funds it to the cent)', () => {
+    // one multiplier so the draw stream has nothing to vary; the 50/75/100 mixture is linear in it
+    const always = { oilChance: 1, oilMultipliers: [75], oilWeights: [1] };
+    for (const [name, strategy] of Object.entries(strategies)) {
+      let sum = 0;
+      for (const b of boards) sum += play(b, strategy, always);
+      expect(sum / boards.length / ammo.bet, name).toBeCloseTo(RTP, 9);
+    }
+  });
 
   it('also holds on a portrait layout with more mines', () => {
     const t = generateBoard({ cols: 3, rows: 5 }, mulberry32(11), 11, { deadMin: 1, deadMax: 1, minesMin: 4, minesMax: 4 });
@@ -203,7 +213,26 @@ describe('Game rules', () => {
     expect(classifyItem(7, 1.5, bet)).toBe('treasure');
     expect(classifyItem(30, 1.9, bet)).toBe('treasure');
     expect(classifyItem(30, 3, bet)).toBe('aqueduct');
-    expect(classifyItem(500, 60, bet)).toBe('oil');
+  });
+
+  it('oil seep: strikes at the configured rate and multiplies the pot', () => {
+    const g = new Game({ layout: { cols: 9, rows: 4 }, ammo, seed: 8, oilChance: 1, oilMultipliers: [75], oilWeights: [1] });
+    expect(g.shave).toBeCloseTo(1 / 75, 12);
+    const safe = hiddenCells(g).find((i) => !g.board.mines[i])!;
+    const risk = g.probs[safe]!;
+    const r = g.fire(safe);
+    expect(r.kind).toBe('safe');
+    if (r.kind === 'safe') {
+      expect(r.item).toBe('oil');
+      expect(r.oilMultiplier).toBe(75);
+      // shave * 75 = 1, so the pot grows exactly like an ordinary fair shot would have
+      expect(r.totalAfter).toBeCloseTo((ammo.bet * RTP) / (1 - risk), 9);
+    }
+    // never strikes when disabled
+    const g2 = new Game({ layout: { cols: 9, rows: 4 }, ammo, seed: 8, oilChance: 0 });
+    expect(g2.shave).toBe(1);
+    const r2 = g2.fire(hiddenCells(g2).find((i) => !g2.board.mines[i])!);
+    if (r2.kind === 'safe') expect(r2.oilMultiplier).toBe(0);
   });
 
   it('is reproducible from its seed', () => {
