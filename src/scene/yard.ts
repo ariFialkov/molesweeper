@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Board } from '../engine/board';
 import type { Layout } from '../engine/config';
 import { mulberry32 } from '../engine/rng';
-import { disposeObject, makeRock, makeTree } from './items';
+import { disposeObject, makeFlag, makeMine, makeRock, makeTree } from './items';
 import { GridOverlay } from './overlay';
 import { numberTexture } from './text';
 import { grassTexture, lawnTexture, woodTexture } from './textures';
@@ -145,24 +145,6 @@ export class Yard {
       b.castShadow = true;
       this.group.add(b);
     }
-    const shed = new THREE.Group();
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, 1.6), new THREE.MeshStandardMaterial({ color: 0xc94f3d, roughness: 0.9 }));
-    walls.position.y = 0.8;
-    walls.castShadow = true;
-    shed.add(walls);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.0, 0.9, 4), new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 0.9 }));
-    roof.position.y = 2.05;
-    roof.rotation.y = Math.PI / 4;
-    roof.scale.set(1, 1, 0.62);
-    shed.add(roof);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.05), new THREE.MeshStandardMaterial({ color: 0x5b3a22 }));
-    door.position.set(0.4, 0.5, 0.82);
-    shed.add(door);
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.05), new THREE.MeshStandardMaterial({ color: 0xa9dcff, emissive: 0x335577, emissiveIntensity: 0.3 }));
-    win.position.set(-0.6, 0.95, 0.82);
-    shed.add(win);
-    shed.position.set(-0.6, 0, fz0 - 1.8);
-    this.group.add(shed);
     const treeRng = mulberry32(board.seed ^ 0x51ed27);
     for (const [x, z] of [
       [fx1 + 2.0, fz0 - 1.4],
@@ -231,15 +213,36 @@ export class Yard {
     return t;
   }
 
-  setNumber(i: number, n: number) {
+  /** A proven mine is dug up and defused: a small crater, the mine itself, and a flag. */
+  flagMine(i: number): { mine: THREE.Group; flag: THREE.Group } {
     const t = this.tiles[i]!;
-    if (n <= 0 || t.decal) return;
+    t.revealed = true;
+    this.overlay.setState(i, 'flagged');
+    const crater = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 0.1, 18), new THREE.MeshStandardMaterial({ color: 0x4e3420, roughness: 1 }));
+    crater.position.set(t.position.x, 0.05, t.position.z);
+    this.group.add(crater);
+    t.crater = crater;
+    const mine = makeMine();
+    mine.scale.setScalar(0.75);
+    const flag = makeFlag();
+    flag.position.set(0.22, 0, 0.1);
+    mine.add(flag);
+    this.placeItem(i, mine);
+    return { mine, flag };
+  }
+
+  /** Press the number into the crater floor; `shown === false` presses an unreadable "?" instead. */
+  setNumber(i: number, n: number, shown = true) {
+    const t = this.tiles[i]!;
+    if (t.decal) return;
+    if (shown && n <= 0) return;
+    // pressed into the front lip of the crater so whatever pops out of it never hides it
     const decal = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.5, 0.5),
-      new THREE.MeshStandardMaterial({ map: numberTexture(n), transparent: true, roughness: 1, depthWrite: false }),
+      new THREE.PlaneGeometry(0.42, 0.42),
+      new THREE.MeshStandardMaterial({ map: numberTexture(shown ? n : '?'), transparent: true, roughness: 1, depthWrite: false }),
     );
     decal.rotation.x = -Math.PI / 2;
-    decal.position.set(t.position.x, 0.115, t.position.z);
+    decal.position.set(t.position.x, 0.115, t.position.z + 0.22);
     decal.renderOrder = 2;
     this.group.add(decal);
     t.decal = decal;
@@ -247,7 +250,7 @@ export class Yard {
 
   placeItem(i: number, obj: THREE.Object3D) {
     const t = this.tiles[i]!;
-    obj.position.set(t.position.x, 0.08, t.position.z);
+    obj.position.set(t.position.x, 0.08, t.position.z - 0.08);
     this.group.add(obj);
     t.item = obj;
   }

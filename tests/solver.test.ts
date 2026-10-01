@@ -76,6 +76,44 @@ describe('solver', () => {
     }
   });
 
+  it('accounts for known (flagged) mines', () => {
+    const rng = mulberry32(21);
+    const board = generateBoard({ cols: 5, rows: 4 }, rng, 21, { deadMin: 1, deadMax: 2, minesMin: 3, minesMax: 4 });
+    const playable = board.kind.map((k) => k === 'dirt');
+    const mineIdx = board.mines.findIndex((m) => m);
+    const known = new Array(board.n).fill(false);
+    known[mineIdx] = true;
+    const revealed = new Array(board.n).fill(false);
+    const safe = board.kind.map((k, i) => (k === 'dirt' && !board.mines[i] ? i : -1)).filter((i) => i >= 0);
+    revealed[safe[0]!] = true;
+    revealed[safe[3]!] = true;
+    const res = solve({ n: board.n, playable, neighbors: board.neighbors, revealed, numbers: board.numbers, totalMines: board.mineCount, knownMines: known });
+    // brute force with the mine fixed: enumerate the other mines among hidden non-known squares
+    const hidden: number[] = [];
+    for (let i = 0; i < board.n; i++) if (playable[i] && !revealed[i] && !known[i]) hidden.push(i);
+    const expected = new Float64Array(board.n);
+    let total = 0;
+    const rec = (start: number, left: number, chosen: number[]) => {
+      if (left === 0) {
+        const isMine = new Array(board.n).fill(false);
+        isMine[mineIdx] = true;
+        for (const c of chosen) isMine[c] = true;
+        for (let r = 0; r < board.n; r++) {
+          if (!revealed[r]) continue;
+          const cnt = board.neighbors[r]!.reduce((a, j) => a + (isMine[j] ? 1 : 0), 0);
+          if (cnt !== board.numbers[r]) return;
+        }
+        total++;
+        for (const c of chosen) expected[c]++;
+        return;
+      }
+      for (let k = start; k <= hidden.length - left; k++) rec(k + 1, left - 1, [...chosen, hidden[k]!]);
+    };
+    rec(0, board.mineCount - 1, []);
+    for (const i of hidden) expect(res.probs[i]).toBeCloseTo(expected[i]! / total, 10);
+    expect(res.probs[mineIdx]).toBe(1);
+  });
+
   it('neighbours respect grid edges', () => {
     expect(neighborsOf({ cols: 4, rows: 9 }, 0).sort((a, b) => a - b)).toEqual([1, 4, 5]);
     expect(neighborsOf({ cols: 6, rows: 6 }, 35).sort((a, b) => a - b)).toEqual([28, 29, 34]);

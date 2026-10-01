@@ -106,8 +106,8 @@ button.cash {
   background: linear-gradient(180deg, #7fe37a, #38b54a);
   color: #0f2b12;
   box-shadow: 0 5px 0 #1f7a2c, 0 10px 22px rgba(0, 0, 0, 0.3);
-  font-size: 20px;
-  padding: 16px 30px;
+  font-size: 19px;
+  padding: 14px 28px;
   animation: pulse 1.6s ease-in-out infinite;
 }
 button.cash:disabled {
@@ -229,12 +229,18 @@ button.cash:disabled {
 
 /* bottom panel */
 .bottom {
-  padding: 8px 12px calc(12px + var(--safe-bottom));
+  padding: 6px 12px calc(8px + var(--safe-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  gap: 4px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0));
+}
+.meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
 }
 .round {
   display: flex;
@@ -247,11 +253,11 @@ button.cash:disabled {
 .prize {
   background: var(--panel);
   border: 2px solid var(--line);
-  border-radius: 18px;
-  padding: 8px 18px;
+  border-radius: 16px;
+  padding: 5px 16px;
   text-align: center;
   backdrop-filter: blur(6px);
-  min-width: 150px;
+  min-width: 140px;
 }
 .prize .lbl {
   font-size: 11px;
@@ -260,7 +266,7 @@ button.cash:disabled {
   opacity: 0.7;
 }
 .prize .amt {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 900;
   color: var(--sun);
   line-height: 1.1;
@@ -274,7 +280,7 @@ button.cash:disabled {
   opacity: 0.8;
 }
 .hint {
-  font-size: 13px;
+  font-size: 12px;
   opacity: 0.85;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   text-align: center;

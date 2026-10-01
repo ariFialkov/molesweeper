@@ -151,6 +151,18 @@ export function makeMine(): THREE.Group {
   return g;
 }
 
+/** Little red warning flag planted on a defused mine. */
+export function makeFlag(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.7, 6), std(0xdddddd, { metalness: 0.5, roughness: 0.4 }), 0, 0.35, 0));
+  const cloth = mesh(new THREE.BoxGeometry(0.26, 0.16, 0.01), std(0xe63946, { roughness: 0.8 }), 0.13, 0.6, 0);
+  cloth.name = 'cloth';
+  g.add(cloth);
+  const skull = mesh(new THREE.SphereGeometry(0.035, 8, 8), std(0xffffff), 0.13, 0.6, 0.008);
+  g.add(skull);
+  return g;
+}
+
 /** Coffin (lid separate so it can fly off). */
 export function makeCoffin(): { group: THREE.Group; lid: THREE.Mesh; box: THREE.Mesh } {
   const group = new THREE.Group();

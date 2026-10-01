@@ -27,12 +27,10 @@ function allBoards(template: Board): Board[] {
 
 type Strategy = (g: Game) => number | 'cashout';
 
-/** hidden squares a sane player would fire at (not the ones the numbers prove to be mines) */
+/** squares the player can still fire at */
 const hiddenCells = (g: Game) => {
   const out: number[] = [];
-  for (let i = 0; i < g.board.n; i++) {
-    if (g.cellKind(i) === 'dirt' && !g.isRevealed(i) && g.probs[i]! < 1 - 1e-12) out.push(i);
-  }
+  for (let i = 0; i < g.board.n; i++) if (g.isHidden(i)) out.push(i);
   return out;
 };
 
@@ -140,42 +138,61 @@ describe('Game rules', () => {
     expect(() => g.fire(0)).toThrow();
   });
 
-  it('opens a cascade around a zero, worth nothing', () => {
-    let found = false;
-    for (let seed = 1; seed < 500 && !found; seed++) {
-      const g = new Game({ layout: { cols: 6, rows: 6 }, ammo, seed });
-      const zero = g.board.numbers.findIndex((n, i) => n === 0 && g.board.kind[i] === 'dirt' && !g.board.mines[i]);
-      if (zero < 0) continue;
-      const r = g.fire(zero);
-      if (r.kind !== 'safe') continue;
-      expect(r.cascade.length).toBeGreaterThan(0);
-      for (const c of r.cascade) expect(g.isRevealed(c.index)).toBe(true);
-      // everything opened for free is provably safe
-      for (const c of r.cascade) expect(g.board.mines[c.index]).toBe(false);
-      found = true;
+  it('never leaves a deduction on the board: every square in play is a real gamble', () => {
+    let opened = 0;
+    let flags = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const g = new Game({ layout: seed % 2 ? { cols: 9, rows: 4 } : { cols: 4, rows: 9 }, ammo, seed });
+      const rng = mulberry32(seed);
+      while (!g.isOver) {
+        const cells = hiddenCells(g);
+        const safe = cells.filter((i) => !g.board.mines[i]);
+        if (!safe.length) break;
+        const r = g.fire(safe[Math.floor(rng() * safe.length)]!);
+        expect(r.kind).toBe('safe');
+        if (r.kind !== 'safe') break;
+        opened += r.cascade.length;
+        flags += r.flagged.length;
+        for (const c of r.cascade) expect(g.board.mines[c.index]).toBe(false);
+        for (const f of r.flagged) expect(g.board.mines[f]).toBe(true);
+        for (let i = 0; i < g.board.n; i++) {
+          if (!g.isHidden(i)) continue;
+          expect(g.probs[i]).toBeGreaterThan(1e-9);
+          expect(g.probs[i]).toBeLessThan(1 - 1e-9);
+        }
+        expect(g.minesLeft).toBe(g.mineCount - g.flagged.filter(Boolean).length);
+      }
     }
-    expect(found).toBe(true);
+    expect(opened).toBeGreaterThan(0);
+    expect(flags).toBeGreaterThan(0);
   });
 
-  it('a proven mine is still a mine: firing at it busts', () => {
+  it('a flagged mine is inert and the round ends once nothing is left to gamble on', () => {
     let checked = false;
-    for (let seed = 1; seed < 2000 && !checked; seed++) {
-      const g = new Game({ layout: { cols: 6, rows: 6 }, ammo, seed });
-      for (let step = 0; step < 20 && !g.isOver; step++) {
-        const certain = g.probs.findIndex((p, i) => p >= 1 - 1e-12 && !g.isRevealed(i));
-        if (certain >= 0) {
-          expect(g.board.mines[certain]).toBe(true);
-          expect(g.fire(certain).kind).toBe('mine');
-          expect(g.phase).toBe('busted');
+    for (let seed = 1; seed < 3000 && !checked; seed++) {
+      const g = new Game({ layout: { cols: 9, rows: 4 }, ammo, seed });
+      while (!g.isOver) {
+        const safe = hiddenCells(g).filter((i) => !g.board.mines[i]);
+        if (!safe.length) break;
+        g.fire(safe[0]!);
+        const f = g.flagged.findIndex(Boolean);
+        if (f >= 0 && !g.isOver) {
+          expect(g.fire(f).kind).toBe('already');
+          expect(g.phase).toBe('playing');
           checked = true;
           break;
         }
-        const cells = hiddenCells(g).filter((i) => !g.board.mines[i]);
-        if (!cells.length) break;
-        g.fire(cells[0]!);
       }
     }
     expect(checked).toBe(true);
+    // play a board to the end: all safe squares opened => auto cash-out
+    const g = new Game({ layout: { cols: 4, rows: 9 }, ammo, seed: 77 });
+    while (!g.isOver) {
+      const safe = hiddenCells(g).filter((i) => !g.board.mines[i]);
+      g.fire(safe[0]!);
+    }
+    expect(g.phase).toBe('cashed');
+    expect(g.hiddenPlayableCount).toBe(0);
   });
 
   it('classifies items by payout', () => {

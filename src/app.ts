@@ -49,6 +49,10 @@ export class App {
   private dummy = new THREE.Object3D();
   private bestFactor = 1;
 
+  private get tw() {
+    return this.sm.tweens;
+  }
+
   constructor(canvas: HTMLCanvasElement, hudRoot: HTMLElement) {
     this.sm = new SceneManager(canvas);
     this.effects = new Effects(this.sm, this.sfx);
@@ -144,7 +148,7 @@ export class App {
 
   private roundView() {
     const g = this.game!;
-    return { total: g.displayedTotal, shots: g.shots, mines: g.mineCount, canCashOut: g.canCashOut, bet: g.bet, ammo: g.ammo, seed: g.seed };
+    return { total: g.displayedTotal, shots: g.shots, mines: g.minesLeft, canCashOut: g.canCashOut, bet: g.bet, ammo: g.ammo, seed: g.seed };
   }
 
   // ---------- aiming ----------
@@ -234,8 +238,9 @@ export class App {
 
   /** Fire at a square. `impact` is where the shot actually lands (defaults to the square's centre). */
   async fire(index: number, impact?: THREE.Vector3) {
-    const g = this.game!;
-    const yard = this.yard!;
+    if (!this.game || !this.yard || this.busy || this.game.isOver) return;
+    const g = this.game;
+    const yard = this.yard;
     this.busy = true;
     this.aim.enabled = false;
     this.sfx.launch();
@@ -301,9 +306,16 @@ export class App {
       }
       case 'safe': {
         this.effects.impact(g.ammo.id, hit);
-        await this.effects.openCrater(yard, res.index, res.number);
-        if (res.cascade.length) void this.effects.cascade(yard, res.cascade);
-        this.hud.updateRound(this.roundView());
+        await this.effects.openCrater(yard, res.index, res.number, res.shown);
+        if (res.cascade.length) void this.effects.autoOpen(yard, res.cascade);
+        // the mines-left counter only drops once the flags are actually planted
+        this.hud.updateRound({ ...this.roundView(), mines: g.minesLeft + res.flagged.length });
+        if (res.flagged.length) {
+          void this.tw
+            .delay(0.35)
+            .then(() => this.effects.flagMines(yard, res.flagged))
+            .then(() => this.hud.updateRound(this.roundView()));
+        }
         this.bestFactor = Math.max(this.bestFactor, res.factor);
         void this.effects.revealItem(yard, res.index, res.item, res.gain, res.factor, g.ammo.id, g.shots);
         this.toastFor(res);
@@ -333,7 +345,9 @@ export class App {
       default:
         this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! +${formatMoney(res.gain)}`, 'win');
     }
-    if (res.cascade.length) this.hud.toast(`✨ Zero! ${res.cascade.length} squares opened for free.`, 'info', 2);
+    if (res.cascade.length) this.hud.toast(`🔎 ${res.cascade.length} square${res.cascade.length === 1 ? '' : 's'} proven safe, opened for free.`, 'info', 2.2);
+    if (res.flagged.length) this.hud.toast(`🚩 ${res.flagged.length} mine${res.flagged.length === 1 ? '' : 's'} proven and defused.`, 'info', 2.2);
+    if (res.cascade.some((c) => c.grave)) this.hud.toast(`⚰️ Secret grave: we're just gonna ignore this one. +$0.00`, 'grave', 3.5);
   }
 
   private cashOut() {

@@ -203,7 +203,7 @@ export class Effects {
   }
 
   /** Blow the square open: turf and soil fly, a crater appears, then the number fades in. */
-  async openCrater(yard: Yard, index: number, number: number, big = false): Promise<void> {
+  async openCrater(yard: Yard, index: number, number: number, shown = true, big = false): Promise<void> {
     const pos = yard.cellPosition(index);
     this.sfx.dirt();
     this.particles.burst({ position: pos, count: big ? 160 : 70, colors: DIRT, speed: big ? [4, 12] : [2, 6], direction: new THREE.Vector3(0, 1, 0), spread: 0.55, gravity: 14, life: [0.5, 1.3], size: big ? [0.06, 0.16] : [0.04, 0.11] });
@@ -224,8 +224,8 @@ export class Effects {
       },
       ease.outBack,
     );
-    if (number > 0) {
-      yard.setNumber(index, number);
+    if (!shown || number > 0) {
+      yard.setNumber(index, number, shown);
       const decal = yard.tile(index).decal!;
       const mat = decal.material as THREE.MeshStandardMaterial;
       mat.opacity = 0;
@@ -233,12 +233,43 @@ export class Effects {
     }
   }
 
-  /** Small free reveals around a zero. */
-  async cascade(yard: Yard, cells: { index: number; number: number }[]): Promise<void> {
-    for (let i = 0; i < cells.length; i++) {
-      const c = cells[i]!;
-      void this.openCrater(yard, c.index, c.number);
-      await this.tw.delay(0.06);
+  /** Squares the numbers proved safe: opened for free, one after another. */
+  async autoOpen(yard: Yard, cells: { index: number; number: number; shown: boolean; grave: boolean }[]): Promise<void> {
+    for (const c of cells) {
+      void this.openCrater(yard, c.index, c.number, c.shown);
+      if (c.grave) void this.tw.delay(0.3).then(() => this.graveSequence(yard, c.index));
+      await this.tw.delay(0.07);
+    }
+  }
+
+  /** Squares the numbers proved to be mines: dug up, defused, flagged. */
+  async flagMines(yard: Yard, cells: number[]): Promise<void> {
+    for (const i of cells) {
+      const pos = yard.cellPosition(i);
+      this.particles.burst({ position: pos, count: 40, colors: DIRT, speed: [1.5, 4], direction: new THREE.Vector3(0, 1, 0), spread: 0.6, gravity: 12, life: [0.4, 0.9], size: [0.04, 0.09] });
+      const { mine, flag } = yard.flagMine(i);
+      mine.position.y = -0.35;
+      flag.scale.set(1, 0.01, 1);
+      this.sfx.click();
+      void this.tw
+        .run(0.4, (k) => (mine.position.y = -0.35 + 0.43 * k), ease.outBack)
+        .then(() => {
+          this.sfx.coin(4);
+          return this.tw.run(0.3, (k) => flag.scale.set(1, k, 1), ease.outBack);
+        });
+      const blink = mine.getObjectByName('blink') as THREE.Mesh | undefined;
+      if (blink) (blink.material as THREE.MeshStandardMaterial).color.setHex(0x44ff66);
+      if (blink) (blink.material as THREE.MeshStandardMaterial).emissive.setHex(0x22cc44);
+      const cloth = flag.getObjectByName('cloth') as THREE.Mesh | undefined;
+      if (cloth) {
+        this.tw.loop((_dt, el) => {
+          if (!cloth.parent) return false;
+          cloth.rotation.y = Math.sin(el * 5) * 0.25;
+          return true;
+        });
+      }
+      this.floatingText(pos, 'Defused', { color: '#ff9b9b', size: 0.5, duration: 1.4 });
+      await this.tw.delay(0.12);
     }
   }
 
@@ -346,7 +377,7 @@ export class Effects {
   /** Mine: it pops up, blinks, and takes the yard with it. */
   async mineExplosion(yard: Yard, index: number): Promise<void> {
     const pos = yard.cellPosition(index);
-    await this.openCrater(yard, index, 0);
+    await this.openCrater(yard, index, 0, true);
     const mine = makeMine();
     yard.placeItem(index, mine);
     mine.scale.setScalar(0.01);

@@ -77,29 +77,25 @@ export class SceneManager {
     const cx = (b.minX + b.maxX) / 2;
     const cz = (b.minZ + b.maxZ) / 2;
     const portrait = window.innerHeight > window.innerWidth;
-    // elevation: more top-down for portrait so the long board fits
-    const elev = portrait ? THREE.MathUtils.degToRad(58) : THREE.MathUtils.degToRad(50);
+    const elev = THREE.MathUtils.degToRad(portrait ? 64 : 62);
     const dir = new THREE.Vector3(0, Math.sin(elev), Math.cos(elev));
-    this.lookAt.set(cx, 0, cz + (portrait ? 0.3 : 0.2));
     // the board plus a sliver of lawn (the fence may run under the HUD)
-    const f = 0.22;
+    const f = 0.18;
     const corners = [
       new THREE.Vector3(b.minX - f, 0, b.minZ - f),
       new THREE.Vector3(b.maxX + f, 0, b.minZ - f),
       new THREE.Vector3(b.minX - f, 0, b.maxZ + f),
       new THREE.Vector3(b.maxX + f, 0, b.maxZ + f),
-      new THREE.Vector3(b.minX, 0.7, b.minZ),
-      new THREE.Vector3(b.maxX, 0.7, b.minZ),
+      new THREE.Vector3(b.minX, 0.35, b.minZ),
+      new THREE.Vector3(b.maxX, 0.35, b.minZ),
     ];
     // NDC limits: fill the screen, leaving only the top bar and the bottom panel
     const limX = 0.995;
-    const topY = portrait ? 0.84 : 0.86;
-    const botY = -0.66;
-    let lo = 4;
-    let hi = 60;
-    const fits = (dist: number) => {
-      this.camera.position.copy(this.lookAt).addScaledVector(dir, dist);
-      this.camera.lookAt(this.lookAt);
+    const topY = 0.9;
+    const botY = -0.76;
+    const fits = (look: THREE.Vector3, dist: number) => {
+      this.camera.position.copy(look).addScaledVector(dir, dist);
+      this.camera.lookAt(look);
       this.camera.updateMatrixWorld();
       for (const c of corners) {
         const p = c.clone().project(this.camera);
@@ -107,12 +103,39 @@ export class SceneManager {
       }
       return true;
     };
-    for (let k = 0; k < 24; k++) {
-      const mid = (lo + hi) / 2;
-      if (fits(mid)) hi = mid;
-      else lo = mid;
+    const minDist = (look: THREE.Vector3) => {
+      let lo = 2;
+      let hi = 80;
+      if (!fits(look, hi)) return Infinity;
+      for (let k = 0; k < 22; k++) {
+        const mid = (lo + hi) / 2;
+        if (fits(look, mid)) hi = mid;
+        else lo = mid;
+      }
+      return hi;
+    };
+    // search the look-at point along the board's depth: biggest board, centred between the HUD bars
+    const midY = (topY + botY) / 2;
+    let best = { score: Infinity, dist: Infinity, dz: 0 };
+    const depth = b.maxZ - b.minZ;
+    for (let k = 0; k <= 30; k++) {
+      const dz = -depth * 0.3 + (depth * 0.9 * k) / 30;
+      const look = new THREE.Vector3(cx, 0, cz + dz);
+      const d = minDist(look);
+      if (!Number.isFinite(d)) continue;
+      fits(look, d);
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const c of corners.slice(0, 4)) {
+        const y = c.clone().project(this.camera).y;
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+      const score = d * (1 + 0.6 * Math.abs((minY + maxY) / 2 - midY));
+      if (score < best.score) best = { score, dist: d, dz };
     }
-    this.camera.position.copy(this.lookAt).addScaledVector(dir, hi);
+    this.lookAt.set(cx, 0, cz + best.dz);
+    this.camera.position.copy(this.lookAt).addScaledVector(dir, best.dist);
     this.camera.lookAt(this.lookAt);
     this.baseCamPos.copy(this.camera.position);
     this.sun.target.position.set(cx, 0, cz);

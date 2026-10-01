@@ -15,9 +15,11 @@ export interface SolverInput {
   /** playable neighbours of each square */
   neighbors: number[][];
   revealed: boolean[];
-  /** adjacent-mine number for each revealed square */
+  /** adjacent-mine number for each revealed square; a negative value means the number is not shown */
   numbers: number[];
   totalMines: number;
+  /** squares known to be mines (flagged by the game); they are neither hidden nor safe */
+  knownMines?: boolean[];
 }
 
 export interface SolverResult {
@@ -69,11 +71,20 @@ interface Component {
 }
 
 export function solve(input: SolverInput): SolverResult {
-  const { n, playable, neighbors, revealed, numbers, totalMines } = input;
+  const { n, playable, neighbors, revealed, numbers } = input;
+  const known = input.knownMines ?? [];
   const probs = new Float64Array(n);
 
   const hiddenList: number[] = [];
-  for (let i = 0; i < n; i++) if (playable[i] && !revealed[i]) hiddenList.push(i);
+  let knownCount = 0;
+  for (let i = 0; i < n; i++) {
+    if (!playable[i]) continue;
+    if (known[i]) {
+      knownCount++;
+      probs[i] = 1;
+    } else if (!revealed[i]) hiddenList.push(i);
+  }
+  const totalMines = input.totalMines - knownCount;
   const hidden = hiddenList.length;
   if (hidden === 0) return { probs, hidden, weight: 1 };
 
@@ -81,9 +92,10 @@ export function solve(input: SolverInput): SolverResult {
   const rawConstraints: { cells: number[]; target: number }[] = [];
   const isFrontier: boolean[] = new Array(n).fill(false);
   for (let r = 0; r < n; r++) {
-    if (!revealed[r] || !playable[r]) continue;
-    const cells = neighbors[r]!.filter((j) => !revealed[j]);
-    const target = numbers[r]!;
+    if (!revealed[r] || !playable[r] || known[r] || numbers[r]! < 0) continue;
+    const cells = neighbors[r]!.filter((j) => !revealed[j] && !known[j]);
+    const target = numbers[r]! - neighbors[r]!.reduce((a, j) => a + (known[j] ? 1 : 0), 0);
+    if (target < 0) return { probs, hidden, weight: 0 };
     if (cells.length === 0) {
       if (target !== 0) return { probs, hidden, weight: 0 };
       continue;

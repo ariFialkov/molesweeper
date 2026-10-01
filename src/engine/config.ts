@@ -6,9 +6,9 @@ export interface Layout {
   rows: number;
 }
 
-/** Same number of squares in both orientations, so the maths never changes. */
+/** The same 4x9 board, rotated for the screen: identical squares, identical maths. */
 export const LAYOUTS = {
-  landscape: { cols: 6, rows: 6 } as Layout,
+  landscape: { cols: 9, rows: 4 } as Layout,
   portrait: { cols: 4, rows: 9 } as Layout,
 };
 export const TOTAL_CELLS = 36;
@@ -20,6 +20,13 @@ export const DEAD_MAX = 7;
 /** Mines per backyard, inclusive. */
 export const MINES_MIN = 5;
 export const MINES_MAX = 7;
+
+/**
+ * Chance that an opened square shows its number at all; otherwise the dirt is unreadable ("?").
+ * Decided by a seeded coin flip that never looks at the value, so a "?" leaks nothing.
+ * Fewer numbers means fewer proofs for the game to resolve, so rounds stay suspenseful longer.
+ */
+export const NUMBER_SHOW_CHANCE = 0.5;
 
 /** Chance that a worthless ("nothing") reveal is a secret grave. Max one per backyard. */
 export const GRAVE_CHANCE = 0.1;

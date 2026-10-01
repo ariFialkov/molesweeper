@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Layout } from '../engine/config';
 
-export type OverlayState = 'hidden' | 'revealed' | 'dead' | 'scorched';
+export type OverlayState = 'hidden' | 'revealed' | 'dead' | 'flagged' | 'scorched';
 
 /**
  * The translucent "digital" grid drawn over the lawn: glowing rounded outlines for
@@ -90,6 +90,15 @@ export class GridOverlay {
             ctx.setLineDash([10, 10]);
             ctx.lineWidth = 3;
             ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+            ctx.stroke();
+            break;
+          case 'flagged':
+            ctx.shadowColor = 'rgba(255, 80, 80, 0.9)';
+            ctx.shadowBlur = 12;
+            ctx.fillStyle = 'rgba(255,60,60,0.12)';
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(255,110,110,0.8)';
             ctx.stroke();
             break;
           case 'scorched':

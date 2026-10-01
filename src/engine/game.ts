@@ -1,5 +1,5 @@
 import { generateBoard, type Board, type CellKind } from './board';
-import { GRAVE_CHANCE, ITEM_RULES, RTP, type AmmoDef, type ItemType, type Layout } from './config';
+import { GRAVE_CHANCE, ITEM_RULES, NUMBER_SHOW_CHANCE, RTP, type AmmoDef, type ItemType, type Layout } from './config';
 import { mulberry32, randomSeed, type Rng } from './rng';
 import { solve } from './solver';
 
@@ -19,6 +19,10 @@ export interface ShotPreview {
 export interface CascadeReveal {
   index: number;
   number: number;
+  /** false: the dirt is unreadable, the number is not shown */
+  shown: boolean;
+  /** this free square happened to hold the secret grave */
+  grave: boolean;
 }
 
 export type ShotResult =
@@ -29,14 +33,18 @@ export type ShotResult =
       kind: 'safe';
       index: number;
       number: number;
+      /** false: the dirt is unreadable, the number is not shown */
+      shown: boolean;
       item: ItemType;
       risk: number;
       factor: number;
       gain: number;
       totalBefore: number;
       totalAfter: number;
-      /** extra squares opened for free because this one had no adjacent mines */
+      /** squares the numbers now prove safe: opened for free by the game */
       cascade: CascadeReveal[];
+      /** squares the numbers now prove to be mines: dug up and defused by the game */
+      flagged: number[];
       /** the round ended by itself (yard fully cleared) */
       autoCashout: boolean;
     };
@@ -48,6 +56,8 @@ export interface GameOptions {
   rtp?: number;
   /** testing hook: play a specific board instead of generating one */
   board?: Board;
+  /** override NUMBER_SHOW_CHANCE (simulations) */
+  numberShowChance?: number;
 }
 
 /**
@@ -56,8 +66,12 @@ export interface GameOptions {
  * Pricing: the ticket starts worth RTP * bet. Each safe reveal at posterior mine risk p
  * multiplies the ticket by 1/(1-p). Because the expected value of every shot is exactly
  * the ticket's current value, cashing out at ANY point returns RTP * bet in expectation,
- * no matter how cleverly (or badly) the numbers are read. The only way to do worse is to
- * fire at a square the numbers already prove to be a mine.
+ * no matter how cleverly (or badly) the numbers are read.
+ *
+ * No deduction is ever left to the player: after every shot the game itself opens every
+ * square the visible numbers prove safe (worth nothing) and flags every square they prove
+ * to be a mine, repeating until every remaining hidden square has 0 < p < 1. Whatever the
+ * player can still hit is a genuine gamble.
  */
 export class Game {
   readonly board: Board;
@@ -69,6 +83,11 @@ export class Game {
 
   phase: Phase = 'ready';
   revealed: boolean[];
+  /** mines the game has dug up and defused because the numbers proved them */
+  flagged: boolean[];
+  /** opened squares whose number is readable */
+  shown: boolean[];
+  readonly numberShowChance: number;
   /** ticket value (what a cash-out pays) */
   total: number;
   shots = 0;
@@ -85,6 +104,9 @@ export class Game {
     this.rtp = opts.rtp ?? RTP;
     this.board = opts.board ?? generateBoard(opts.layout, this.rng, this.seed);
     this.revealed = new Array(this.board.n).fill(false);
+    this.flagged = new Array(this.board.n).fill(false);
+    this.shown = new Array(this.board.n).fill(false);
+    this.numberShowChance = opts.numberShowChance ?? NUMBER_SHOW_CHANCE;
     this.total = this.bet * this.rtp;
     this.probs = this.computeProbs();
   }
@@ -95,6 +117,11 @@ export class Game {
 
   get mineCount(): number {
     return this.board.mineCount;
+  }
+
+  /** mines still buried somewhere unknown */
+  get minesLeft(): number {
+    return this.board.mineCount - this.flagged.filter(Boolean).length;
   }
 
   get isOver(): boolean {
@@ -114,8 +141,17 @@ export class Game {
 
   get hiddenPlayableCount(): number {
     let c = 0;
-    for (let i = 0; i < this.board.n; i++) if (this.board.kind[i] === 'dirt' && !this.revealed[i]) c++;
+    for (let i = 0; i < this.board.n; i++) if (this.isHidden(i)) c++;
     return c;
+  }
+
+  /** a square the player can still fire at */
+  isHidden(i: number): boolean {
+    return this.board.kind[i] === 'dirt' && !this.revealed[i] && !this.flagged[i];
+  }
+
+  isFlagged(i: number): boolean {
+    return this.flagged[i]!;
   }
 
   cellKind(i: number): CellKind {
@@ -126,8 +162,15 @@ export class Game {
     return this.revealed[i]!;
   }
 
+  /** the number the player can read on an opened square, or -1 if unreadable / not opened */
   numberAt(i: number): number {
-    return this.board.numbers[i]!;
+    return this.revealed[i] && this.shown[i] ? this.board.numbers[i]! : -1;
+  }
+
+  /** Open a square; the coin flip for readability never looks at the value. */
+  private open(i: number) {
+    this.revealed[i] = true;
+    this.shown[i] = this.rng() < this.numberShowChance;
   }
 
   private computeProbs(): Float64Array {
@@ -136,8 +179,9 @@ export class Game {
       playable: this.board.kind.map((k) => k === 'dirt'),
       neighbors: this.board.neighbors,
       revealed: this.revealed,
-      numbers: this.board.numbers,
+      numbers: this.board.numbers.map((n, i) => (this.shown[i] ? n : -1)),
       totalMines: this.board.mineCount,
+      knownMines: this.flagged,
     });
     if (res.weight <= 0) throw new Error('inconsistent board state');
     return res.probs;
@@ -146,7 +190,7 @@ export class Game {
   /** Risk / reward preview for aiming at a square. Null for dead, revealed or finished. */
   preview(index: number): ShotPreview | null {
     if (this.isOver) return null;
-    if (this.board.kind[index] !== 'dirt' || this.revealed[index]) return null;
+    if (!this.isHidden(index)) return null;
     const risk = this.probs[index]!;
     const before = this.shots === 0 ? this.bet : this.total;
     const totalAfter = risk >= 1 ? 0 : this.total / (1 - risk);
@@ -169,7 +213,7 @@ export class Game {
     if (this.isOver) throw new Error('round is over');
     const kind = this.board.kind[index]!;
     if (kind !== 'dirt') return { kind: 'dead', index, cell: kind };
-    if (this.revealed[index]) return { kind: 'already', index };
+    if (this.revealed[index] || this.flagged[index]) return { kind: 'already', index };
 
     this.phase = 'playing';
     this.shots++;
@@ -196,11 +240,10 @@ export class Game {
       this.graveUsed = true;
     }
 
-    this.revealed[index] = true;
+    this.open(index);
     const cascade: CascadeReveal[] = [];
-    if (this.board.numbers[index] === 0) this.cascadeFrom(index, cascade);
-
-    this.probs = this.computeProbs();
+    const flagged: number[] = [];
+    this.autoResolve(cascade, flagged);
 
     let autoCashout = false;
     if (this.yardCleared()) {
@@ -212,6 +255,7 @@ export class Game {
       kind: 'safe',
       index,
       number: this.board.numbers[index]!,
+      shown: this.shown[index]!,
       item,
       risk,
       factor,
@@ -219,33 +263,47 @@ export class Game {
       totalBefore,
       totalAfter,
       cascade,
+      flagged,
       autoCashout,
     };
     this.history.push(res);
     return res;
   }
 
-  /** Opening a "0" opens its neighbours too (they are provably safe, so they are worth nothing). */
-  private cascadeFrom(index: number, out: CascadeReveal[]) {
-    const stack = [index];
-    while (stack.length) {
-      const i = stack.pop()!;
-      for (const j of this.board.neighbors[i]!) {
-        if (this.revealed[j]) continue;
-        this.revealed[j] = true;
-        out.push({ index: j, number: this.board.numbers[j]! });
-        if (this.board.numbers[j] === 0) stack.push(j);
+  /**
+   * The game plays out every proof itself: squares the visible numbers prove safe are opened
+   * (worth nothing), squares they prove to be mines are flagged. Repeats until every hidden
+   * square is a genuine gamble. Depends only on what the player can see, so it leaks nothing.
+   */
+  private autoResolve(opened: CascadeReveal[], flagged: number[]) {
+    for (;;) {
+      this.probs = this.computeProbs();
+      let changed = false;
+      for (let i = 0; i < this.board.n; i++) {
+        if (!this.isHidden(i)) continue;
+        const p = this.probs[i]!;
+        if (p <= 1e-12) {
+          this.open(i);
+          let grave = false;
+          if (!this.graveUsed && this.rng() < GRAVE_CHANCE) {
+            grave = true;
+            this.graveUsed = true;
+          }
+          opened.push({ index: i, number: this.board.numbers[i]!, shown: this.shown[i]!, grave });
+          changed = true;
+        } else if (p >= 1 - 1e-12) {
+          this.flagged[i] = true;
+          flagged.push(i);
+          changed = true;
+        }
       }
+      if (!changed) return;
     }
   }
 
-  /** No hidden square is worth shooting: everything left is a certain mine (or nothing is left). */
+  /** Nothing is left to gamble on. */
   private yardCleared(): boolean {
-    for (let i = 0; i < this.board.n; i++) {
-      if (this.board.kind[i] !== 'dirt' || this.revealed[i]) continue;
-      if (this.probs[i]! < 1 - 1e-12) return false;
-    }
-    return true;
+    return this.hiddenPlayableCount === 0;
   }
 
   cashOut(): number {

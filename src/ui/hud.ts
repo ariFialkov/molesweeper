@@ -117,7 +117,7 @@ export class Hud {
   showRound(v: RoundView) {
     this.bottom.innerHTML = '';
     this.minesPill.style.display = '';
-    this.minesPill.innerHTML = `💣 <span class="lbl">mines</span> ${v.mines}`;
+    this.minesPill.innerHTML = `💣 <span class="lbl">mines left</span> ${v.mines}`;
     const round = el('div', 'round');
     const prize = el('div', 'prize');
     prize.innerHTML = `<div class="lbl">Prize</div><div class="amt"></div><div class="sub"></div>`;
@@ -126,14 +126,16 @@ export class Hud {
     const cash = el('button', 'cash', 'Cash out');
     cash.onclick = () => this.handlers.onCashOut();
     round.append(cash);
-    this.bottom.append(round);
-    this.bottom.append(el('div', 'hint', ''));
-    this.bottom.append(el('div', 'seed', `round #${v.seed.toString(16)} · ${v.ammo.name} · bet ${formatMoney(v.bet)}`));
+    const meta = el('div', 'meta');
+    meta.append(el('div', 'hint', ''));
+    meta.append(el('div', 'seed', `round #${v.seed.toString(16)} · ${v.ammo.name} · bet ${formatMoney(v.bet)}`));
+    this.bottom.append(round, meta);
     this.lastTotal = -1;
     this.updateRound(v);
   }
 
   updateRound(v: RoundView) {
+    this.minesPill.innerHTML = `💣 <span class="lbl">mines left</span> ${v.mines}`;
     const cash = this.bottom.querySelector<HTMLButtonElement>('button.cash');
     const sub = this.bottom.querySelector<HTMLElement>('.prize .sub');
     const hint = this.bottom.querySelector<HTMLElement>('.hint');
@@ -192,9 +194,10 @@ export class Hud {
         <p>Pick your ammo (that's your bet), then slingshot it into the backyard. Every square you blow open either adds to your prize or is a mine that ends the round. Cash out whenever you like.</p>
         <h3>Reading the dirt</h3>
         <ul>
-          <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. Opening a 0 opens its neighbours for free.</li>
+          <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. About half the time the dirt is too messy to read and you get a "?" instead.</li>
+          <li>You never have to do the maths: whenever the numbers prove a square safe, the game opens it for free (worth nothing), and whenever they prove a mine, the game digs it up and flags it. Everything left is a genuine gamble.</li>
           <li>Trees and rocks are dead squares. They never hide mines and never count.</li>
-          <li>Squares next to high numbers are more likely to be mines. If one blows up safely anyway, it pays more. A square the numbers already prove safe pays nothing.</li>
+          <li>Squares next to high numbers are more likely to be mines. If one turns out safe anyway, it pays more.</li>
         </ul>
         <h3>What you can dig up</h3>
         <ul>

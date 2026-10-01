@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 
-const numberCache = new Map<number, THREE.Texture>();
+const numberCache = new Map<string, THREE.Texture>();
 
-/** A number pressed into the dirt: darker, softly edged, like a discoloured indent. */
-export function numberTexture(n: number): THREE.Texture {
-  const cached = numberCache.get(n);
+/** A number (or an unreadable "?") pressed into the dirt: darker, softly edged, like a discoloured indent. */
+export function numberTexture(n: number | '?'): THREE.Texture {
+  const key = String(n);
+  const cached = numberCache.get(key);
   if (cached) return cached;
+  const unreadable = n === '?';
   const size = 256;
   const c = document.createElement('canvas');
   c.width = size;
@@ -16,20 +18,32 @@ export function numberTexture(n: number): THREE.Texture {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   // soft halo of darker earth
-  ctx.shadowColor = 'rgba(40, 22, 8, 0.9)';
-  ctx.shadowBlur = size * 0.06;
-  ctx.fillStyle = 'rgba(52, 30, 12, 0.92)';
-  ctx.fillText(String(n), size / 2, size * 0.54);
-  ctx.shadowBlur = 0;
-  // faint highlight edge to sell the indent
-  ctx.fillStyle = 'rgba(190, 140, 90, 0.35)';
-  ctx.fillText(String(n), size / 2 - size * 0.012, size * 0.54 - size * 0.012);
-  ctx.fillStyle = 'rgba(48, 26, 10, 0.95)';
-  ctx.fillText(String(n), size / 2, size * 0.54);
+  const text = String(n);
+  const alpha = unreadable ? 0.8 : 1;
+  ctx.font = `900 ${size * 0.78}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  // dark pressed shadow below, lighter dry-earth face on top: reads as an indent in the soil
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.07;
+  ctx.strokeStyle = `rgba(30, 16, 6, ${0.9 * alpha})`;
+  ctx.strokeText(text, size / 2, size * 0.56);
+  ctx.fillStyle = `rgba(30, 16, 6, ${0.9 * alpha})`;
+  ctx.fillText(text, size / 2 + size * 0.02, size * 0.58);
+  ctx.fillStyle = unreadable ? `rgba(196, 160, 118, ${alpha})` : `rgba(236, 204, 156, ${alpha})`;
+  ctx.fillText(text, size / 2, size * 0.54);
+  if (unreadable) {
+    // crumbled dirt over the mark
+    for (let i = 0; i < 26; i++) {
+      ctx.fillStyle = i % 2 ? 'rgba(120, 85, 50, 0.85)' : 'rgba(70, 45, 22, 0.85)';
+      const x = size * (0.3 + Math.random() * 0.4);
+      const y = size * (0.2 + Math.random() * 0.6);
+      const w = size * (0.025 + Math.random() * 0.05);
+      ctx.fillRect(x, y, w, w * 0.6);
+    }
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  numberCache.set(n, tex);
+  numberCache.set(key, tex);
   return tex;
 }
 
