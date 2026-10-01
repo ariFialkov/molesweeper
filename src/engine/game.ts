@@ -167,10 +167,11 @@ export class Game {
     return this.revealed[i] && this.shown[i] ? this.board.numbers[i]! : -1;
   }
 
-  /** Open a square; the coin flip for readability never looks at the value. */
-  private open(i: number) {
+  /** Open a square. Free (proven-safe) opens always show their number; a player's shot shows it on a
+   *  seeded coin flip that never looks at the value. */
+  private open(i: number, byPlayer: boolean) {
     this.revealed[i] = true;
-    this.shown[i] = this.rng() < this.numberShowChance;
+    this.shown[i] = byPlayer ? this.rng() < this.numberShowChance : true;
   }
 
   private computeProbs(): Float64Array {
@@ -240,7 +241,7 @@ export class Game {
       this.graveUsed = true;
     }
 
-    this.open(index);
+    this.open(index, true);
     const cascade: CascadeReveal[] = [];
     const flagged: number[] = [];
     this.autoResolve(cascade, flagged);
@@ -283,7 +284,7 @@ export class Game {
         if (!this.isHidden(i)) continue;
         const p = this.probs[i]!;
         if (p <= 1e-12) {
-          this.open(i);
+          this.open(i, false);
           let grave = false;
           if (!this.graveUsed && this.rng() < GRAVE_CHANCE) {
             grave = true;

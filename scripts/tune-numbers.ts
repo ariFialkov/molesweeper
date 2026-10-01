@@ -10,7 +10,7 @@ const hidden = (g: Game) => {
   for (let i = 0; i < g.board.n; i++) if (g.isHidden(i)) out.push(i);
   return out;
 };
-for (const q of [1, 0.75, 0.5, 0.35, 0.2, 0]) {
+for (const q of [0.75, 0.5, 0.35, 0.25, 0.15]) {
   const rng = mulberry32(99);
   let shots = 0, busts = 0, cleared = 0, opened = 0, flags = 0, paid = 0, shownNums = 0, zeroOpen = 0;
   for (let r = 0; r < rounds; r++) {

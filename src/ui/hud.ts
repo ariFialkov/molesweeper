@@ -194,16 +194,16 @@ export class Hud {
         <p>Pick your ammo (that's your bet), then slingshot it into the backyard. Every square you blow open either adds to your prize or is a mine that ends the round. Cash out whenever you like.</p>
         <h3>Reading the dirt</h3>
         <ul>
-          <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. About half the time the dirt is too messy to read and you get a "?" instead.</li>
+          <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. Prizes usually churn the dirt too much to leave a number; once a critter burrows off you'll sometimes find one underneath.</li>
           <li>You never have to do the maths: whenever the numbers prove a square safe, the game opens it for free (worth nothing), and whenever they prove a mine, the game digs it up and flags it. Everything left is a genuine gamble.</li>
           <li>Trees and rocks are dead squares. They never hide mines and never count.</li>
           <li>Squares next to high numbers are more likely to be mines. If one turns out safe anyway, it pays more.</li>
         </ul>
         <h3>What you can dig up</h3>
         <ul>
-          <li>🐹 Mole: small prize (up to your bet)</li>
-          <li>🦫 Groundhog: 1x to 4x your bet</li>
-          <li>💎 Buried treasure: 5x your bet and up</li>
+          <li>🐹 Mole: a small prize</li>
+          <li>🦫 Groundhog: a third of your bet and up</li>
+          <li>💎 Buried treasure: your whole bet and up</li>
           <li>🏛️ Aqueduct: multiplies your whole prize x2 to x25</li>
           <li>🛢️ Oil seep: x50 and beyond. Legendary.</li>
           <li>⚰️ Secret grave: worth nothing, but worth seeing.</li>

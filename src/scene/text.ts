@@ -1,49 +1,38 @@
 import * as THREE from 'three';
 
-const numberCache = new Map<string, THREE.Texture>();
+const numberCache = new Map<number, THREE.Texture>();
 
-/** A number (or an unreadable "?") pressed into the dirt: darker, softly edged, like a discoloured indent. */
-export function numberTexture(n: number | '?'): THREE.Texture {
-  const key = String(n);
-  const cached = numberCache.get(key);
+/** A number pressed into the dirt: a darker, softly edged indent with a lit top edge. */
+export function numberTexture(n: number): THREE.Texture {
+  const cached = numberCache.get(n);
   if (cached) return cached;
-  const unreadable = n === '?';
   const size = 256;
   const c = document.createElement('canvas');
   c.width = size;
   c.height = size;
   const ctx = c.getContext('2d')!;
   ctx.clearRect(0, 0, size, size);
-  ctx.font = `900 ${size * 0.7}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const text = String(n);
+  ctx.font = `900 ${size * 0.72}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  // soft halo of darker earth
-  const text = String(n);
-  const alpha = unreadable ? 0.8 : 1;
-  ctx.font = `900 ${size * 0.78}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
-  // dark pressed shadow below, lighter dry-earth face on top: reads as an indent in the soil
   ctx.lineJoin = 'round';
-  ctx.lineWidth = size * 0.07;
-  ctx.strokeStyle = `rgba(30, 16, 6, ${0.9 * alpha})`;
-  ctx.strokeText(text, size / 2, size * 0.56);
-  ctx.fillStyle = `rgba(30, 16, 6, ${0.9 * alpha})`;
-  ctx.fillText(text, size / 2 + size * 0.02, size * 0.58);
-  ctx.fillStyle = unreadable ? `rgba(196, 160, 118, ${alpha})` : `rgba(236, 204, 156, ${alpha})`;
+  // soft dark halo: packed earth around the indent
+  ctx.shadowColor = 'rgba(25, 12, 4, 0.9)';
+  ctx.shadowBlur = size * 0.07;
+  ctx.fillStyle = 'rgba(28, 14, 5, 0.95)';
   ctx.fillText(text, size / 2, size * 0.54);
-  if (unreadable) {
-    // crumbled dirt over the mark
-    for (let i = 0; i < 26; i++) {
-      ctx.fillStyle = i % 2 ? 'rgba(120, 85, 50, 0.85)' : 'rgba(70, 45, 22, 0.85)';
-      const x = size * (0.3 + Math.random() * 0.4);
-      const y = size * (0.2 + Math.random() * 0.6);
-      const w = size * (0.025 + Math.random() * 0.05);
-      ctx.fillRect(x, y, w, w * 0.6);
-    }
-  }
+  ctx.shadowBlur = 0;
+  // lit upper-left edge, as the sun catches the rim of the indent
+  ctx.fillStyle = 'rgba(214, 170, 120, 0.7)';
+  ctx.fillText(text, size / 2 - size * 0.018, size * 0.54 - size * 0.018);
+  // the indent floor itself
+  ctx.fillStyle = 'rgba(24, 12, 4, 0.97)';
+  ctx.fillText(text, size / 2, size * 0.54);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  numberCache.set(key, tex);
+  numberCache.set(n, tex);
   return tex;
 }
 

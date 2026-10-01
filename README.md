@@ -32,9 +32,10 @@ npm run icons      # regenerate the PWA icons (pure JS PNG writer)
    3–7 squares are trees or rocks (dead squares, never mines, never counted). 5–7 squares are mines.
 3. Press anywhere and drag to pull the slingshot, release to fire. Aiming is free: the shot lands
    where the reticle points and the closest square blows open.
-4. A safe hit blows a crater and the prize pops out. About half the time a number is pressed into
-   the dirt counting the mines in the 8 neighbours, exactly like minesweeper; the rest of the time the
-   dirt is unreadable and shows a "?".
+4. A safe hit blows a crater and the prize pops out. After a moment the prize leaves again (moles
+   burrow, chests sink) and about one square in four turns out to have a number pressed into the dirt
+   counting the mines in the 8 neighbours, exactly like minesweeper. Squares the game opens for free
+   always show their number.
 5. You never get to do the maths. Whenever the visible numbers prove a square safe, the game opens it
    for free (worth nothing); whenever they prove a mine, the game digs it up and plants a flag on it.
    Every square you can still hit is a genuine gamble, so the round can end on any shot.
@@ -44,9 +45,9 @@ What you can dig up (the skin is chosen by what the shot paid):
 
 | Item | Effect | When it shows up |
 | --- | --- | --- |
-| 🐹 Mole | adds up to 1× bet | ordinary safe squares |
-| 🦫 Groundhog | adds 1×–4× bet | bigger pots / riskier squares |
-| 💎 Buried treasure | adds 5× bet and up | big pots |
+| 🐹 Mole | adds under 0.35× bet | about 70 % of safe shots |
+| 🦫 Groundhog | adds 0.35×–1× bet | about 25 % of safe shots |
+| 💎 Buried treasure | adds 1× bet and up | about 5 % of safe shots, big pots |
 | 🏛️ Aqueduct | multiplies the prize ×2–×25 | squares with ≥ 50 % mine risk |
 | 🛢️ Oil seep | multiplies ×50 and beyond | squares with ≥ 98 % risk (legendary) |
 | ⚰️ Secret grave | +$0.00, coffin bursts, mummy flies | 10 % of squares the game opens for free, max 1 per yard |
@@ -81,11 +82,14 @@ Consequences that shape the design:
   them, the game resolves every proof the moment it exists: proven-safe squares open for free, proven
   mines get flagged, repeating until every hidden square has `0 < p < 1`. This depends only on what
   the player can see, so it leaks nothing and the pricing stays exact.
-- **Readable numbers are a coin flip.** With every number shown, minesweeper boards are mostly
-  deducible and the game would resolve a third of all yards by itself after a shot or two. Each opened
-  square therefore shows its number with probability `NUMBER_SHOW_CHANCE` (0.5) and a "?" otherwise.
-  The flip is seeded and never looks at the value, so a "?" carries no information; the solver simply
-  treats that square as safe with an unknown count. `scripts/tune-numbers.ts` shows the trade-off.
+- **Numbers on prize squares are a coin flip.** With every number shown, minesweeper boards are mostly
+  deducible and the game would resolve a third of all yards by itself after a shot or two. A square
+  the player shoots therefore shows its number (after the prize has left) with probability
+  `NUMBER_SHOW_CHANCE` (0.25); squares the game opens for free always do. The flip is seeded and never
+  looks at the value, so a missing number carries no information; the solver simply treats that square
+  as safe with an unknown count. `scripts/tune-numbers.ts` shows the trade-off.
+- **Item skins are cosmetic**, chosen from what the shot paid (`ITEM_RULES`), so their frequency can be
+  retuned freely without touching the RTP. `scripts/tune-items.ts` prints the prize distribution.
 - Item types are cosmetic: mole / groundhog / treasure by how much the shot added, aqueduct / oil seep
   when the shot at least doubled the pot. The pay table lives in `src/engine/config.ts`.
 - The `RTP` constant is the only house-edge knob. Because the edge is applied once up front, the

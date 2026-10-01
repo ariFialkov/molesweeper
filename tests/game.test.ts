@@ -199,7 +199,8 @@ describe('Game rules', () => {
     const bet = 5;
     expect(classifyItem(0, 1, bet)).toBe('nothing');
     expect(classifyItem(1, 1.2, bet)).toBe('mole');
-    expect(classifyItem(7, 1.5, bet)).toBe('groundhog');
+    expect(classifyItem(3, 1.5, bet)).toBe('groundhog');
+    expect(classifyItem(7, 1.5, bet)).toBe('treasure');
     expect(classifyItem(30, 1.9, bet)).toBe('treasure');
     expect(classifyItem(30, 3, bet)).toBe('aqueduct');
     expect(classifyItem(500, 60, bet)).toBe('oil');

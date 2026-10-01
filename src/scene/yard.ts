@@ -231,26 +231,36 @@ export class Yard {
     return { mine, flag };
   }
 
-  /** Press the number into the crater floor; `shown === false` presses an unreadable "?" instead. */
-  setNumber(i: number, n: number, shown = true) {
+  /** Press the number into the crater floor. Returns the decal (invisible until faded in), or null for 0. */
+  setNumber(i: number, n: number): THREE.Mesh | null {
     const t = this.tiles[i]!;
-    if (t.decal) return;
-    if (shown && n <= 0) return;
-    // pressed into the front lip of the crater so whatever pops out of it never hides it
+    if (t.decal) return t.decal;
+    if (n <= 0) return null;
     const decal = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.42, 0.42),
-      new THREE.MeshStandardMaterial({ map: numberTexture(shown ? n : '?'), transparent: true, roughness: 1, depthWrite: false }),
+      new THREE.PlaneGeometry(0.52, 0.52),
+      new THREE.MeshStandardMaterial({ map: numberTexture(n), transparent: true, roughness: 1, depthWrite: false, opacity: 0 }),
     );
     decal.rotation.x = -Math.PI / 2;
-    decal.position.set(t.position.x, 0.115, t.position.z + 0.22);
+    decal.position.set(t.position.x, 0.115, t.position.z);
     decal.renderOrder = 2;
     this.group.add(decal);
     t.decal = decal;
+    return decal;
+  }
+
+  /** The prize is gone (burrowed, sunk, collected): drop the tile's item reference. */
+  clearItem(i: number) {
+    const t = this.tiles[i]!;
+    if (t.item) {
+      t.item.removeFromParent();
+      disposeObject(t.item);
+      t.item = null;
+    }
   }
 
   placeItem(i: number, obj: THREE.Object3D) {
     const t = this.tiles[i]!;
-    obj.position.set(t.position.x, 0.08, t.position.z - 0.08);
+    obj.position.set(t.position.x, 0.08, t.position.z);
     this.group.add(obj);
     t.item = obj;
   }

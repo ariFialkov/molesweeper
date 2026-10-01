@@ -22,11 +22,12 @@ export const MINES_MIN = 5;
 export const MINES_MAX = 7;
 
 /**
- * Chance that an opened square shows its number at all; otherwise the dirt is unreadable ("?").
- * Decided by a seeded coin flip that never looks at the value, so a "?" leaks nothing.
- * Fewer numbers means fewer proofs for the game to resolve, so rounds stay suspenseful longer.
+ * Chance that a square the player shoots shows its number (once the prize has burrowed away).
+ * Decided by a seeded coin flip that never looks at the value, so a missing number leaks nothing.
+ * Squares the game opens for free always show their number. Fewer numbers means fewer proofs
+ * for the game to resolve, so rounds stay suspenseful longer (scripts/tune-numbers.ts).
  */
-export const NUMBER_SHOW_CHANCE = 0.5;
+export const NUMBER_SHOW_CHANCE = 0.25;
 
 /** Chance that a worthless ("nothing") reveal is a secret grave. Max one per backyard. */
 export const GRAVE_CHANCE = 0.1;
@@ -57,9 +58,9 @@ export type ItemType = 'nothing' | 'grave' | 'mole' | 'groundhog' | 'treasure' |
 export const ITEM_RULES = {
   oilMinFactor: 50, // oil seep: x50 and up (x50 / x75 / x100 in spirit)
   aqueductMinFactor: 2, // aqueduct: x2 .. x25 (multiplies the running total)
-  treasureMinGain: 5, // buried treasure: +5x .. +10x bet
-  groundhogMinGain: 1, // groundhog: +1x .. +4x bet
-  // mole: +0.05x .. +1x bet (anything smaller than a cent is "nothing")
+  treasureMinGain: 1, // buried treasure: +1x bet and up (about 1 safe shot in 20)
+  groundhogMinGain: 0.35, // groundhog: +0.35x .. +1x bet (about 1 safe shot in 4)
+  // mole: anything smaller (anything under a cent is "nothing")
 };
 
 export const ITEM_LABEL: Record<ItemType, string> = {

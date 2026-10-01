@@ -306,7 +306,7 @@ export class App {
       }
       case 'safe': {
         this.effects.impact(g.ammo.id, hit);
-        await this.effects.openCrater(yard, res.index, res.number, res.shown);
+        await this.effects.openCrater(yard, res.index, null);
         if (res.cascade.length) void this.effects.autoOpen(yard, res.cascade);
         // the mines-left counter only drops once the flags are actually planted
         this.hud.updateRound({ ...this.roundView(), mines: g.minesLeft + res.flagged.length });
@@ -317,7 +317,7 @@ export class App {
             .then(() => this.hud.updateRound(this.roundView()));
         }
         this.bestFactor = Math.max(this.bestFactor, res.factor);
-        void this.effects.revealItem(yard, res.index, res.item, res.gain, res.factor, g.ammo.id, g.shots);
+        void this.effects.revealItem(yard, res.index, res.item, res.gain, res.factor, g.ammo.id, g.shots, res.shown ? res.number : null);
         this.toastFor(res);
         if (res.autoCashout) {
           await this.sm.tweens.delay(1.2);

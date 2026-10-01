@@ -202,8 +202,8 @@ export class Effects {
     });
   }
 
-  /** Blow the square open: turf and soil fly, a crater appears, then the number fades in. */
-  async openCrater(yard: Yard, index: number, number: number, shown = true, big = false): Promise<void> {
+  /** Blow the square open: turf and soil fly, a crater appears, then the number (if any) fades in. */
+  async openCrater(yard: Yard, index: number, number: number | null, big = false): Promise<void> {
     const pos = yard.cellPosition(index);
     this.sfx.dirt();
     this.particles.burst({ position: pos, count: big ? 160 : 70, colors: DIRT, speed: big ? [4, 12] : [2, 6], direction: new THREE.Vector3(0, 1, 0), spread: 0.55, gravity: 14, life: [0.5, 1.3], size: big ? [0.06, 0.16] : [0.04, 0.11] });
@@ -224,19 +224,21 @@ export class Effects {
       },
       ease.outBack,
     );
-    if (!shown || number > 0) {
-      yard.setNumber(index, number, shown);
-      const decal = yard.tile(index).decal!;
-      const mat = decal.material as THREE.MeshStandardMaterial;
-      mat.opacity = 0;
-      void this.tw.run(0.5, (k) => (mat.opacity = k));
-    }
+    if (number !== null) this.showNumber(yard, index, number);
+  }
+
+  /** Fade the pressed-in number into the crater floor. */
+  showNumber(yard: Yard, index: number, number: number) {
+    const decal = yard.setNumber(index, number);
+    if (!decal) return;
+    const mat = decal.material as THREE.MeshStandardMaterial;
+    void this.tw.run(0.6, (k) => (mat.opacity = Math.max(mat.opacity, k)));
   }
 
   /** Squares the numbers proved safe: opened for free, one after another. */
   async autoOpen(yard: Yard, cells: { index: number; number: number; shown: boolean; grave: boolean }[]): Promise<void> {
     for (const c of cells) {
-      void this.openCrater(yard, c.index, c.number, c.shown);
+      void this.openCrater(yard, c.index, c.shown ? c.number : null);
       if (c.grave) void this.tw.delay(0.3).then(() => this.graveSequence(yard, c.index));
       await this.tw.delay(0.07);
     }
@@ -273,8 +275,12 @@ export class Effects {
     }
   }
 
-  /** Pop the item out of the crater with a bounce and a floating prize. */
-  async revealItem(yard: Yard, index: number, item: ItemType, gain: number, factor: number, ammo: AmmoId, shotNumber: number): Promise<void> {
+  /**
+   * Pop the item out of the crater with a bounce and a floating prize. After a while the prize
+   * leaves again (moles burrow, chests sink, pumps run dry) and, if this square is readable,
+   * the number it was hiding fades into the crater floor.
+   */
+  async revealItem(yard: Yard, index: number, item: ItemType, gain: number, factor: number, ammo: AmmoId, shotNumber: number, numberAfter: number | null): Promise<void> {
     const pos = yard.cellPosition(index);
     let obj: THREE.Group | null = null;
     switch (item) {
@@ -295,9 +301,11 @@ export class Effects {
         break;
       case 'grave':
         await this.graveSequence(yard, index);
+        if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
         return;
       case 'nothing':
         this.floatingText(pos, 'Nothing', { color: '#d8d0c0', size: 0.5, duration: 1.2 });
+        if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
         return;
     }
     yard.placeItem(index, obj);
@@ -348,10 +356,43 @@ export class Effects {
     if (item === 'treasure') {
       this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.4, 0)), count: 40, colors: [0xffd23f, 0xfff3a0, 0xffffff], speed: [1.5, 4], spread: 0.8, gravity: 5, life: [0.5, 1.2], size: [0.03, 0.07] });
     }
+    let linger = 2.6;
     if (ammo === 'disco' && (item === 'mole' || item === 'groundhog')) {
       await this.tw.delay(0.45);
       this.dance(o, 2.4);
+      linger = 2.6;
     }
+    if (item === 'oil') linger = 5.5;
+    await this.tw.delay(linger);
+    await this.leave(yard, index, o, item);
+    if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
+  }
+
+  /** The prize goes back where it came from. */
+  private async leave(yard: Yard, index: number, obj: THREE.Group, item: ItemType): Promise<void> {
+    const pos = yard.cellPosition(index);
+    const y0 = obj.position.y;
+    if (item === 'mole' || item === 'groundhog') {
+      this.sfx.squeak();
+      // a little look around, then dive
+      await this.tw.run(0.35, (k) => (obj.rotation.y = Math.sin(k * Math.PI * 2) * 0.6));
+      this.sfx.dirt();
+      this.particles.burst({ position: pos, count: 18, colors: DIRT, speed: [1, 3], direction: new THREE.Vector3(0, 1, 0), spread: 0.7, gravity: 12, life: [0.3, 0.7], size: [0.03, 0.07] });
+      await this.tw.run(
+        0.35,
+        (k) => {
+          obj.position.y = y0 - 0.9 * k;
+          obj.scale.set(1 + k * 0.2, 1 - k * 0.3, 1 + k * 0.2);
+        },
+        ease.inQuad,
+      );
+    } else {
+      // chest, aqueduct, derrick: the yard swallows it back
+      this.sfx.thud();
+      this.particles.burst({ position: pos, count: 14, colors: DIRT, speed: [0.8, 2], direction: new THREE.Vector3(0, 1, 0), spread: 0.8, gravity: 12, life: [0.3, 0.6], size: [0.03, 0.06] });
+      await this.tw.run(0.6, (k) => (obj.position.y = y0 - 0.9 * k), ease.inQuad);
+    }
+    yard.clearItem(index);
   }
 
   /** The mole gets down. */
@@ -377,7 +418,7 @@ export class Effects {
   /** Mine: it pops up, blinks, and takes the yard with it. */
   async mineExplosion(yard: Yard, index: number): Promise<void> {
     const pos = yard.cellPosition(index);
-    await this.openCrater(yard, index, 0, true);
+    await this.openCrater(yard, index, null);
     const mine = makeMine();
     yard.placeItem(index, mine);
     mine.scale.setScalar(0.01);
