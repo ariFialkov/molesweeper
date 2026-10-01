@@ -227,47 +227,6 @@ button.cash:disabled {
   }
 }
 
-/* aim tooltip that follows the targeted square */
-.aim {
-  position: absolute;
-  transform: translate(-50%, -125%);
-  background: var(--panel-2);
-  border: 2px solid var(--line);
-  border-radius: 12px;
-  padding: 6px 10px;
-  font-weight: 800;
-  font-size: 13px;
-  pointer-events: none;
-  white-space: nowrap;
-  text-align: center;
-  line-height: 1.25;
-  display: none;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-}
-.aim.show {
-  display: block;
-}
-.aim .risk {
-  font-size: 12px;
-  opacity: 0.9;
-}
-.aim .prize {
-  font-size: 15px;
-  color: var(--sun);
-}
-.aim.safe .prize {
-  color: #c9e7c8;
-}
-.aim.hot {
-  border-color: rgba(255, 92, 92, 0.6);
-}
-.aim.hot .risk {
-  color: #ffb3b3;
-}
-.aim.dead {
-  border-color: rgba(120, 200, 110, 0.5);
-}
-
 /* bottom panel */
 .bottom {
   padding: 8px 12px calc(12px + var(--safe-bottom));

@@ -12,6 +12,7 @@ const DIRT = [0x6b4423, 0x8a5a33, 0x4e3218, 0xa0754a];
 const SPARKS = [0xfff3a0, 0xffd23f, 0xff9f1c, 0xffffff];
 const FIRE = [0xff6b00, 0xffb300, 0xff3d00, 0xffe066];
 const SMOKE = [0x4a4a4a, 0x2f2f2f, 0x6b6b6b];
+const GRASS = [0x5fae4a, 0x3f8a33, 0x7cc95e];
 const CONFETTI = [0xff4d6d, 0xffd23f, 0x3bceac, 0x0ead69, 0x4d96ff, 0xc77dff, 0xffffff];
 const WOOD = [0x5d3b22, 0x7a4a2a, 0x3e2614];
 
@@ -201,18 +202,13 @@ export class Effects {
     });
   }
 
-  /** Blow the mound open: sink it, spray dirt, show the crater and (optionally) the number. */
+  /** Blow the square open: turf and soil fly, a crater appears, then the number fades in. */
   async openCrater(yard: Yard, index: number, number: number, big = false): Promise<void> {
-    const t = yard.tile(index);
     const pos = yard.cellPosition(index);
     this.sfx.dirt();
     this.particles.burst({ position: pos, count: big ? 160 : 70, colors: DIRT, speed: big ? [4, 12] : [2, 6], direction: new THREE.Vector3(0, 1, 0), spread: 0.55, gravity: 14, life: [0.5, 1.3], size: big ? [0.06, 0.16] : [0.04, 0.11] });
-    const mound = t.mound;
-    const y0 = mound.position.y;
-    await this.tw.run(0.18, (k) => {
-      mound.scale.y = 1 - k * 0.8;
-      mound.position.y = y0 - k * 0.06;
-    });
+    this.particles.burst({ position: pos, count: big ? 60 : 30, colors: GRASS, speed: [2, 5], direction: new THREE.Vector3(0, 1, 0), spread: 0.7, gravity: 10, life: [0.5, 1.1], size: [0.05, 0.1], flat: true });
+    await this.tw.delay(0.08);
     yard.makeCrater(index, big);
     const view = yard.tile(index);
     const crater = view.crater!;

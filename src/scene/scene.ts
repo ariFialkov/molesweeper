@@ -80,19 +80,21 @@ export class SceneManager {
     // elevation: more top-down for portrait so the long board fits
     const elev = portrait ? THREE.MathUtils.degToRad(58) : THREE.MathUtils.degToRad(50);
     const dir = new THREE.Vector3(0, Math.sin(elev), Math.cos(elev));
-    this.lookAt.set(cx, 0, cz + (portrait ? 0.4 : 0.25));
+    this.lookAt.set(cx, 0, cz + (portrait ? 0.3 : 0.2));
+    // the board plus a sliver of lawn (the fence may run under the HUD)
+    const f = 0.22;
     const corners = [
-      new THREE.Vector3(b.minX - 0.4, 0, b.minZ - 0.4),
-      new THREE.Vector3(b.maxX + 0.4, 0, b.minZ - 0.4),
-      new THREE.Vector3(b.minX - 0.4, 0, b.maxZ + 0.4),
-      new THREE.Vector3(b.maxX + 0.4, 0, b.maxZ + 0.4),
-      new THREE.Vector3(b.minX, 1.4, b.minZ),
-      new THREE.Vector3(b.maxX, 1.4, b.minZ),
+      new THREE.Vector3(b.minX - f, 0, b.minZ - f),
+      new THREE.Vector3(b.maxX + f, 0, b.minZ - f),
+      new THREE.Vector3(b.minX - f, 0, b.maxZ + f),
+      new THREE.Vector3(b.maxX + f, 0, b.maxZ + f),
+      new THREE.Vector3(b.minX, 0.7, b.minZ),
+      new THREE.Vector3(b.maxX, 0.7, b.minZ),
     ];
-    // NDC limits leaving room for the top bar and the bottom panel / slingshot
-    const limX = 0.94;
-    const topY = portrait ? 0.76 : 0.8;
-    const botY = -0.6;
+    // NDC limits: fill the screen, leaving only the top bar and the bottom panel
+    const limX = 0.995;
+    const topY = portrait ? 0.84 : 0.86;
+    const botY = -0.66;
     let lo = 4;
     let hi = 60;
     const fits = (dist: number) => {

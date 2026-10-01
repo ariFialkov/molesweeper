@@ -56,3 +56,46 @@ export function woodTexture(): THREE.Texture {
   wood.wrapS = wood.wrapT = THREE.RepeatWrapping;
   return wood;
 }
+
+/** Mowed-lawn checkerboard, one checker per board square, with faint mower stripes. */
+export function lawnTexture(cols: number, rows: number): THREE.Texture {
+  const cell = 96;
+  const c = document.createElement('canvas');
+  c.width = cols * cell;
+  c.height = rows * cell;
+  const ctx = c.getContext('2d')!;
+  for (let r = 0; r < rows; r++) {
+    for (let q = 0; q < cols; q++) {
+      const light = (r + q) % 2 === 0;
+      ctx.fillStyle = light ? '#6cc257' : '#52a344';
+      ctx.fillRect(q * cell, r * cell, cell, cell);
+      // mower stripes: alternate direction per checker
+      ctx.strokeStyle = light ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+      ctx.lineWidth = 3;
+      for (let k = 6; k < cell; k += 12) {
+        ctx.beginPath();
+        if (light) {
+          ctx.moveTo(q * cell + k, r * cell);
+          ctx.lineTo(q * cell + k, r * cell + cell);
+        } else {
+          ctx.moveTo(q * cell, r * cell + k);
+          ctx.lineTo(q * cell + cell, r * cell + k);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  // grass speckle
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = (Math.random() - 0.5) * 26;
+    img.data[i] = Math.max(0, Math.min(255, img.data[i]! + v));
+    img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1]! + v));
+    img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2]! + v * 0.6));
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}

@@ -1,5 +1,5 @@
-import { AMMO, ITEM_LABEL, RTP, type AmmoDef, type AmmoId } from '../engine/config';
-import { formatFactor, formatMoney, type ShotPreview } from '../engine/game';
+import { AMMO, RTP, type AmmoDef, type AmmoId } from '../engine/config';
+import { formatFactor, formatMoney } from '../engine/game';
 
 export interface RoundView {
   total: number;
@@ -29,7 +29,6 @@ export class Hud {
   private balanceEl: HTMLElement;
   private minesPill: HTMLElement;
   private toasts: HTMLElement;
-  private aim: HTMLElement;
   private bottom: HTMLElement;
   private modalHost: HTMLElement;
   private soundBtn: HTMLButtonElement;
@@ -63,10 +62,9 @@ export class Hud {
     top.append(helpBtn);
 
     this.toasts = el('div', 'toasts');
-    this.aim = el('div', 'aim');
     this.bottom = el('div', 'bottom');
     this.modalHost = el('div', 'modal-host');
-    root.append(top, this.toasts, this.aim, this.bottom, this.modalHost);
+    root.append(top, this.toasts, this.bottom, this.modalHost);
   }
 
   setBalance(v: number) {
@@ -76,7 +74,6 @@ export class Hud {
   /** Ammo / bet picker between rounds. */
   showLobby(balance: number) {
     this.minesPill.style.display = 'none';
-    this.hideAim();
     this.bottom.innerHTML = '';
     const lobby = el('div', 'lobby');
     lobby.append(el('h2', undefined, 'Pick your ammo · the bet buys the whole round'));
@@ -155,45 +152,7 @@ export class Hud {
       cash.disabled = !v.canCashOut;
       cash.textContent = v.canCashOut ? `Cash out ${formatMoney(v.total)}` : 'Cash out';
     }
-    if (hint) hint.textContent = v.shots === 0 ? 'Drag to pull back the slingshot, release to fire. Numbers count the mines around a square.' : 'Riskier squares pay more. Cash out any time.';
-  }
-
-  /** Tooltip pinned above the targeted square. */
-  showAim(pv: ShotPreview | null, kind: 'dirt' | 'tree' | 'rock' | 'open' | 'off', x: number, y: number) {
-    this.aim.className = 'aim show';
-    this.aim.style.left = `${x}px`;
-    this.aim.style.top = `${y}px`;
-    if (kind === 'off') {
-      this.aim.className = 'aim';
-      return;
-    }
-    if (kind === 'tree' || kind === 'rock') {
-      this.aim.classList.add('dead');
-      this.aim.innerHTML = `<div class="risk">${kind === 'tree' ? '🌳 Tree' : '🪨 Rock'}</div><div class="prize">Just a burn mark</div>`;
-      return;
-    }
-    if (kind === 'open' || !pv) {
-      this.aim.innerHTML = `<div class="risk">Already open</div><div class="prize">Dud</div>`;
-      return;
-    }
-    const pct = Math.round(pv.risk * 100);
-    if (pv.certainMine) {
-      this.aim.classList.add('hot');
-      this.aim.innerHTML = `<div class="risk">💣 100% mine</div><div class="prize">Can't fire here</div>`;
-      return;
-    }
-    if (pv.certainSafe) {
-      this.aim.classList.add('safe');
-      this.aim.innerHTML = `<div class="risk">✅ 0% risk</div><div class="prize">Safe · +$0.00</div>`;
-      return;
-    }
-    if (pv.risk >= 0.4) this.aim.classList.add('hot');
-    const what = pv.item === 'aqueduct' || pv.item === 'oil' ? `${ITEM_LABEL[pv.item]} ${formatFactor(pv.factor)}` : ITEM_LABEL[pv.item];
-    this.aim.innerHTML = `<div class="risk">💣 ${pct}% risk</div><div class="prize">+${formatMoney(pv.gain)} · ${what}</div>`;
-  }
-
-  hideAim() {
-    this.aim.className = 'aim';
+    if (hint) hint.textContent = v.shots === 0 ? 'Drag to pull back the slingshot, release to fire. Numbers count the mines around a square.' : 'Numbers hint at where the mines are. Cash out any time.';
   }
 
   toast(text: string, kind: 'win' | 'bad' | 'grave' | 'info' = 'info', life = 2.4) {
@@ -235,7 +194,7 @@ export class Hud {
         <ul>
           <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. Opening a 0 opens its neighbours for free.</li>
           <li>Trees and rocks are dead squares. They never hide mines and never count.</li>
-          <li>Aim at a square to see its current mine risk and what it pays if it's safe. Riskier squares pay more; a square the numbers prove safe pays nothing.</li>
+          <li>Squares next to high numbers are more likely to be mines. If one blows up safely anyway, it pays more. A square the numbers already prove safe pays nothing.</li>
         </ul>
         <h3>What you can dig up</h3>
         <ul>
@@ -247,7 +206,7 @@ export class Hud {
           <li>⚰️ Secret grave: worth nothing, but worth seeing.</li>
         </ul>
         <h3>The fairness bit</h3>
-        <p>Each payout is priced from the exact mine probability of the square you hit, so no amount of clever counting beats the house edge. Whatever you do, the game returns ${(RTP * 100).toFixed(0)}% on average. Reading the numbers changes how risky your ride is, not the odds.</p>
+        <p>Behind the scenes each payout is priced from the exact mine probability of the square you hit, so no amount of clever counting beats the house edge. Whatever you do, the game returns ${(RTP * 100).toFixed(0)}% on average. Reading the numbers changes how risky your ride is, not the odds.</p>
       </div>`;
     const actions = el('div', 'actions');
     const ok = el('button', undefined, 'Got it');

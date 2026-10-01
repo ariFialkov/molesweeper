@@ -27,10 +27,11 @@ npm run icons      # regenerate the PWA icons (pure JS PNG writer)
 
 1. Pick your ammo. The ammo is the bet and you use it for the whole round:
    firecracker $5, grenade $10, ICBM $25, disco bomb $50. Each has its own explosion.
-2. The backyard is a 36-square board: 6×6 in landscape, 4×9 in portrait (same maths either way).
+2. The backyard *is* the board: a mowed-lawn checkerboard of 36 squares under a translucent grid,
+   6×6 in landscape, 4×9 in portrait (same maths either way), filling the screen.
    3–7 squares are trees or rocks (dead squares, never mines, never counted). 5–7 squares are mines.
-3. Press anywhere and drag to pull the slingshot, release to fire. While aiming, the targeted
-   square shows its **current mine risk** and **what it pays if it's safe**.
+3. Press anywhere and drag to pull the slingshot, release to fire. Aiming is free: the shot lands
+   where the reticle points and the closest square blows open.
 4. A safe hit blows a crater. A number pressed into the dirt counts mines in the 8 neighbours,
    exactly like minesweeper (a 0 opens its neighbours for free). The prize pops out of the crater.
 5. Cash out any time after your first shot, or keep shooting. A mine ends the round and wrecks the yard.
@@ -69,10 +70,10 @@ production board.
 
 Consequences that shape the design:
 
-- The numbers are honest minesweeper numbers. The aim tooltip shows the same probability the engine
-  charges, so nothing is hidden.
-- A square the numbers prove to be a mine cannot be fired at (it has no upside and a guaranteed loss),
-  and a round ends by itself once only proven mines remain.
+- The numbers are honest minesweeper numbers and the only hint the player gets: the exact risk and
+  the payout are deliberately not shown, so every reveal keeps its suspense.
+- A square the numbers prove to be a mine is still a mine (firing at it is the one way to do worse
+  than 96 %), and a round ends by itself once only proven mines remain.
 - Item types are cosmetic: mole / groundhog / treasure by how much the shot added, aqueduct / oil seep
   when the shot at least doubled the pot. The pay table lives in `src/engine/config.ts`.
 - The `RTP` constant is the only house-edge knob. Because the edge is applied once up front, the

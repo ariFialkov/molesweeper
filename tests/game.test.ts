@@ -27,7 +27,7 @@ function allBoards(template: Board): Board[] {
 
 type Strategy = (g: Game) => number | 'cashout';
 
-/** hidden squares that can be fired at (the engine refuses shots at proven mines) */
+/** hidden squares a sane player would fire at (not the ones the numbers prove to be mines) */
 const hiddenCells = (g: Game) => {
   const out: number[] = [];
   for (let i = 0; i < g.board.n; i++) {
@@ -157,17 +157,16 @@ describe('Game rules', () => {
     expect(found).toBe(true);
   });
 
-  it('refuses to fire at a proven mine', () => {
+  it('a proven mine is still a mine: firing at it busts', () => {
     let checked = false;
     for (let seed = 1; seed < 2000 && !checked; seed++) {
       const g = new Game({ layout: { cols: 6, rows: 6 }, ammo, seed });
-      // open safe squares until some hidden square is a certain mine
       for (let step = 0; step < 20 && !g.isOver; step++) {
         const certain = g.probs.findIndex((p, i) => p >= 1 - 1e-12 && !g.isRevealed(i));
         if (certain >= 0) {
           expect(g.board.mines[certain]).toBe(true);
-          expect(g.fire(certain).kind).toBe('certain-mine');
-          expect(g.phase).not.toBe('busted');
+          expect(g.fire(certain).kind).toBe('mine');
+          expect(g.phase).toBe('busted');
           checked = true;
           break;
         }

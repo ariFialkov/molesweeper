@@ -56,11 +56,13 @@ export class App {
     this.sm.scene.add(this.sm.camera);
 
     this.reticleMat = new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.9, depthWrite: false });
-    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.42, 32), this.reticleMat);
+    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 4, 1), this.reticleMat);
     this.reticle.rotation.x = -Math.PI / 2;
     this.reticle.position.y = 0.2;
     this.reticle.visible = false;
     this.reticle.renderOrder = 5;
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.06, 12), this.reticleMat);
+    this.reticle.add(dot);
     this.sm.scene.add(this.reticle);
 
     this.trajectory = new THREE.InstancedMesh(new THREE.SphereGeometry(0.045, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }), 16);
@@ -152,20 +154,18 @@ export class App {
     this.sfx.stretch();
   }
 
+  /** Free aim: the pull maps to a continuous impact point on the lawn, clamped to the board. */
   private computeTarget(p: Pull) {
     const y = this.yard!;
     const b = y.bounds;
     const cx = (b.minX + b.maxX) / 2;
     const w = b.maxX - b.minX;
     const d = b.maxZ - b.minZ;
-    const tx = cx - p.dx * (w / 2 + 0.2);
-    const tz = b.maxZ - 0.15 - Math.max(0, p.dy) * (d + 0.1) * 1.02;
+    const tx = cx - p.dx * (w / 2 + 0.25);
+    const tz = b.maxZ - 0.3 - Math.max(0, p.dy) * (d + 0.2) * 1.03;
     this.targetPoint.set(tx, 0.2, tz);
-    this.targetIndex = y.cellFromPoint(tx, tz, 0.55);
-    if (this.targetIndex >= 0) {
-      const c = y.cellPosition(this.targetIndex);
-      this.targetPoint.set(c.x, 0.2, c.z);
-    }
+    y.clampToBoard(this.targetPoint);
+    this.targetIndex = y.cellFromPoint(this.targetPoint.x, this.targetPoint.z, 0.6);
   }
 
   private onAimMove(p: Pull) {
@@ -174,31 +174,14 @@ export class App {
     if (p.amount < 0.08) {
       this.reticle.visible = false;
       this.trajectory.visible = false;
-      this.hud.hideAim();
       return;
     }
     this.computeTarget(p);
-    const g = this.game;
-    const i = this.targetIndex;
-    this.reticle.visible = i >= 0;
-    this.trajectory.visible = i >= 0;
-    if (i < 0) {
-      this.hud.hideAim();
-      return;
-    }
+    this.reticle.visible = true;
+    this.trajectory.visible = true;
     this.reticle.position.set(this.targetPoint.x, 0.2, this.targetPoint.z);
-    const kind = g.cellKind(i);
-    const pv = g.preview(i);
-    let color = 0xffd23f;
-    if (kind !== 'dirt') color = 0x8fd18a;
-    else if (g.isRevealed(i)) color = 0xbbbbbb;
-    else if (pv?.certainMine) color = 0xff3b3b;
-    else if (pv?.certainSafe) color = 0xc9e7c8;
-    else if (pv) color = new THREE.Color(0xffd23f).lerp(new THREE.Color(0xff3b3b), Math.min(1, pv.risk * 1.8)).getHex();
-    this.reticleMat.color.setHex(color);
+    this.reticle.rotation.z += 0.02;
     this.drawTrajectory();
-    const screen = this.sm.toScreen(this.targetPoint.clone().add(new THREE.Vector3(0, 0.35, 0)));
-    this.hud.showAim(pv, kind !== 'dirt' ? kind : g.isRevealed(i) ? 'open' : 'dirt', screen.x, screen.y);
   }
 
   private drawTrajectory() {
@@ -232,7 +215,6 @@ export class App {
     this.slingshot.release();
     this.reticle.visible = false;
     this.trajectory.visible = false;
-    this.hud.hideAim();
   }
 
   private onAimRelease(p: Pull) {
@@ -242,20 +224,16 @@ export class App {
     }
     this.computeTarget(p);
     const i = this.targetIndex;
+    const impact = this.targetPoint.clone();
     this.onAimCancel();
     if (i < 0) return;
-    const pv = this.game.preview(i);
-    if (pv?.certainMine) {
-      this.sfx.thud();
-      this.hud.toast("💣 That's a proven mine. The game won't let you throw your prize away.", 'bad');
-      return;
-    }
-    void this.fire(i);
+    void this.fire(i, impact);
   }
 
   // ---------- firing ----------
 
-  private async fire(index: number) {
+  /** Fire at a square. `impact` is where the shot actually lands (defaults to the square's centre). */
+  async fire(index: number, impact?: THREE.Vector3) {
     const g = this.game!;
     const yard = this.yard!;
     this.busy = true;
@@ -266,7 +244,7 @@ export class App {
     const projectile = this.slingshot.spawnProjectile();
     this.sm.scene.add(projectile);
     const p0 = this.slingshot.pouchWorldPosition();
-    const p2 = yard.cellPosition(index).setY(0.25);
+    const p2 = (impact ?? yard.cellPosition(index)).clone().setY(0.25);
     if (g.cellKind(index) !== 'dirt') p2.y = 0.7;
     const dist = p0.distanceTo(p2);
     const duration = 0.42 + dist * 0.035;
@@ -293,30 +271,27 @@ export class App {
     disposeObject(projectile);
 
     const result = g.fire(index);
-    await this.handleResult(result);
+    await this.handleResult(result, p2);
 
     this.slingshot.reload();
     this.busy = false;
     if (!g.isOver) this.aim.enabled = true;
   }
 
-  private async handleResult(res: ShotResult) {
+  private async handleResult(res: ShotResult, impact: THREE.Vector3) {
     const g = this.game!;
     const yard = this.yard!;
-    const pos = yard.cellPosition(res.index);
+    const hit = impact.clone().setY(0.2);
     switch (res.kind) {
       case 'dead':
         this.effects.burnMark(yard, res.index, g.ammo.id);
         this.hud.toast(res.cell === 'tree' ? '🌳 Ouch, the tree. Nothing under it.' : '🪨 Solid rock. Nothing under it.', 'info', 1.6);
         return;
       case 'already':
-        this.effects.dud(pos);
-        return;
-      case 'certain-mine':
-        this.hud.toast("💣 That's a proven mine.", 'bad');
+        this.effects.dud(hit);
         return;
       case 'mine': {
-        this.effects.impact(g.ammo.id, pos);
+        this.effects.impact(g.ammo.id, hit);
         await this.effects.mineExplosion(yard, res.index);
         this.hud.updateRound(this.roundView());
         this.sfx.lose();
@@ -325,7 +300,7 @@ export class App {
         return;
       }
       case 'safe': {
-        this.effects.impact(g.ammo.id, pos);
+        this.effects.impact(g.ammo.id, hit);
         await this.effects.openCrater(yard, res.index, res.number);
         if (res.cascade.length) void this.effects.cascade(yard, res.cascade);
         this.hud.updateRound(this.roundView());

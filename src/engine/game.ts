@@ -24,8 +24,6 @@ export interface CascadeReveal {
 export type ShotResult =
   | { kind: 'dead'; index: number; cell: CellKind }
   | { kind: 'already'; index: number }
-  /** the numbers prove this square is a mine: firing at it is refused (no upside, guaranteed loss) */
-  | { kind: 'certain-mine'; index: number }
   | { kind: 'mine'; index: number; lostBet: number }
   | {
       kind: 'safe';
@@ -58,7 +56,8 @@ export interface GameOptions {
  * Pricing: the ticket starts worth RTP * bet. Each safe reveal at posterior mine risk p
  * multiplies the ticket by 1/(1-p). Because the expected value of every shot is exactly
  * the ticket's current value, cashing out at ANY point returns RTP * bet in expectation,
- * no matter how cleverly (or badly) the numbers are read.
+ * no matter how cleverly (or badly) the numbers are read. The only way to do worse is to
+ * fire at a square the numbers already prove to be a mine.
  */
 export class Game {
   readonly board: Board;
@@ -171,7 +170,6 @@ export class Game {
     const kind = this.board.kind[index]!;
     if (kind !== 'dirt') return { kind: 'dead', index, cell: kind };
     if (this.revealed[index]) return { kind: 'already', index };
-    if (this.probs[index]! >= 1 - 1e-12) return { kind: 'certain-mine', index };
 
     this.phase = 'playing';
     this.shots++;
