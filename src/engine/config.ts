@@ -36,14 +36,15 @@ export interface AmmoDef {
   name: string;
   bet: number;
   blurb: string;
-  emoji: string;
+  /** icon sprite name (src/ui/icons.ts) */
+  icon: 'firecracker' | 'grenade' | 'rocket' | 'disco';
 }
 
 export const AMMO: AmmoDef[] = [
-  { id: 'firecracker', name: 'Firecracker', bet: 5, blurb: 'Sparky schoolyard pop', emoji: '🧨' },
-  { id: 'grenade', name: 'Grenade', bet: 10, blurb: 'Flak & dirt burst', emoji: '💣' },
-  { id: 'icbm', name: 'ICBM', bet: 25, blurb: 'Mini mushroom cloud', emoji: '🚀' },
-  { id: 'disco', name: 'Disco Bomb', bet: 50, blurb: 'Confetti, the mole dances', emoji: '🪩' },
+  { id: 'firecracker', name: 'Firecracker', bet: 5, blurb: 'Sparky schoolyard pop', icon: 'firecracker' },
+  { id: 'grenade', name: 'Grenade', bet: 10, blurb: 'Flak & dirt burst', icon: 'grenade' },
+  { id: 'icbm', name: 'ICBM', bet: 25, blurb: 'Mini mushroom cloud', icon: 'rocket' },
+  { id: 'disco', name: 'Disco Bomb', bet: 50, blurb: 'Confetti, the mole dances', icon: 'disco' },
 ];
 
 export type ItemType = 'nothing' | 'mole' | 'groundhog' | 'treasure' | 'aqueduct' | 'oil';

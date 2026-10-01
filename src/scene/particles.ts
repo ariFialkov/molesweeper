@@ -16,6 +16,8 @@ export interface BurstOptions {
   flat?: boolean;
   drag?: number;
   fade?: boolean;
+  /** how much a particle swells over its life (1 = doubles) */
+  grow?: number;
 }
 
 interface Particle {
@@ -31,6 +33,7 @@ interface Particle {
   drag: number;
   flat: boolean;
   fade: boolean;
+  grow: number;
   color: THREE.Color;
 }
 
@@ -42,10 +45,8 @@ export class Particles {
   private capacity: number;
   private tmpColor = new THREE.Color();
 
-  constructor(scene: THREE.Scene, capacity = 900) {
+  constructor(scene: THREE.Scene, capacity = 900, geo: THREE.BufferGeometry = new THREE.BoxGeometry(1, 1, 1), mat: THREE.Material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, metalness: 0.05 })) {
     this.capacity = capacity;
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, metalness: 0.05 });
     this.mesh = new THREE.InstancedMesh(geo, mat, capacity);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.castShadow = false;
@@ -66,6 +67,7 @@ export class Particles {
         drag: 0,
         flat: false,
         fade: true,
+        grow: 0,
         color: new THREE.Color(),
       });
     }
@@ -99,6 +101,7 @@ export class Particles {
       p.drag = o.drag ?? 0;
       p.flat = o.flat ?? false;
       p.fade = o.fade ?? true;
+      p.grow = o.grow ?? 0;
       p.color.setHex(o.colors[Math.floor(Math.random() * o.colors.length)]!);
       spawned++;
     }
@@ -127,7 +130,8 @@ export class Particles {
       p.rot.y += p.spin.y * dt;
       p.rot.z += p.spin.z * dt;
       const k = p.fade ? Math.min(1, p.life / (p.maxLife * 0.35)) : 1;
-      const s = p.size * k;
+      const age = 1 - p.life / p.maxLife;
+      const s = p.size * k * (1 + p.grow * age);
       this.dummy.position.copy(p.pos);
       this.dummy.rotation.copy(p.rot);
       if (p.flat) this.dummy.scale.set(s * 1.6, s * 0.15, s);

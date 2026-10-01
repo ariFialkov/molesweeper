@@ -1,5 +1,6 @@
 import { AMMO, RTP, type AmmoDef, type AmmoId } from '../engine/config';
 import { formatFactor, formatMoney } from '../engine/game';
+import { icon, iconSprite } from './icons';
 
 export interface RoundView {
   total: number;
@@ -41,22 +42,23 @@ export class Hud {
     private handlers: HudHandlers,
     soundOn: boolean,
   ) {
+    root.insertAdjacentHTML('afterbegin', iconSprite());
     const top = el('div', 'topbar');
-    top.append(el('div', 'logo', '🧨<span class="word">MOLESWEEPER</span> <small>3D · stepper</small>'));
+    top.append(el('div', 'logo', `${icon('firecracker')}<span class="word">MOLESWEEPER</span> <small>3D · stepper</small>`));
     top.append(el('div', 'spacer'));
     this.minesPill = el('div', 'pill mines', '');
     this.minesPill.style.display = 'none';
     top.append(this.minesPill);
     this.balanceEl = el('div', 'pill', '');
     top.append(this.balanceEl);
-    this.soundBtn = el('button', 'icon ghost', soundOn ? '🔊' : '🔇');
+    this.soundBtn = el('button', 'icon ghost', icon(soundOn ? 'sound-on' : 'sound-off'));
     this.soundBtn.title = 'Sound';
     this.soundBtn.onclick = () => {
       const on = this.handlers.onToggleSound();
-      this.soundBtn.textContent = on ? '🔊' : '🔇';
+      this.soundBtn.innerHTML = icon(on ? 'sound-on' : 'sound-off');
     };
     top.append(this.soundBtn);
-    const helpBtn = el('button', 'icon ghost', '?');
+    const helpBtn = el('button', 'icon ghost', icon('help'));
     helpBtn.title = 'How to play';
     helpBtn.onclick = () => this.showHelp();
     top.append(helpBtn);
@@ -81,7 +83,7 @@ export class Hud {
     const cards = new Map<AmmoId, HTMLElement>();
     for (const a of AMMO) {
       const card = el('div', 'ammo clickable');
-      card.innerHTML = `<div class="em">${a.emoji}</div><div class="nm">${a.name}</div><div class="bet">${formatMoney(a.bet)}</div><div class="bl">${a.blurb}</div>`;
+      card.innerHTML = `<div class="em">${icon(a.icon)}</div><div class="nm">${a.name}</div><div class="bet">${formatMoney(a.bet)}</div><div class="bl">${a.blurb}</div>`;
       card.onclick = () => {
         this.selected = a.id;
         cards.forEach((c, id) => c.classList.toggle('selected', id === a.id));
@@ -117,7 +119,7 @@ export class Hud {
   showRound(v: RoundView) {
     this.bottom.innerHTML = '';
     this.minesPill.style.display = '';
-    this.minesPill.innerHTML = `💣 <span class="lbl">mines left</span> ${v.mines}`;
+    this.minesPill.innerHTML = `${icon('mine')} <span class="lbl">mines left</span> ${v.mines}`;
     const round = el('div', 'round');
     const prize = el('div', 'prize');
     prize.innerHTML = `<div class="lbl">Prize</div><div class="amt"></div><div class="sub"></div>`;
@@ -135,7 +137,7 @@ export class Hud {
   }
 
   updateRound(v: RoundView) {
-    this.minesPill.innerHTML = `💣 <span class="lbl">mines left</span> ${v.mines}`;
+    this.minesPill.innerHTML = `${icon('mine')} <span class="lbl">mines left</span> ${v.mines}`;
     const cash = this.bottom.querySelector<HTMLButtonElement>('button.cash');
     const sub = this.bottom.querySelector<HTMLElement>('.prize .sub');
     const hint = this.bottom.querySelector<HTMLElement>('.hint');
@@ -168,9 +170,9 @@ export class Hud {
     const bg = el('div', 'modal-bg');
     const m = el('div', 'modal');
     if (r.kind === 'bust') {
-      m.innerHTML = `<h1 class="bad">💥 KABOOM</h1><p>You hit a mine. The backyard is toast and so is your bet.</p><div class="big">-${formatMoney(r.bet)}</div>`;
+      m.innerHTML = `<h1 class="bad">${icon('boom')} KABOOM</h1><p>You hit a mine. The backyard is toast and so is your bet.</p><div class="big">-${formatMoney(r.bet)}</div>`;
     } else {
-      m.innerHTML = `<h1>💰 Cashed out</h1><p>Nice. The moles live to see another day.</p><div class="big">${formatMoney(r.amount)}</div><div class="stats"><span>${formatFactor(r.amount / r.bet)}</span><span>${r.shots} shot${r.shots === 1 ? '' : 's'}</span><span>profit ${formatMoney(r.amount - r.bet)}</span></div>`;
+      m.innerHTML = `<h1>${icon('cash')} Cashed out</h1><p>Nice. The moles live to see another day.</p><div class="big">${formatMoney(r.amount)}</div><div class="stats"><span>${formatFactor(r.amount / r.bet)}</span><span>${r.shots} shot${r.shots === 1 ? '' : 's'}</span><span>profit ${formatMoney(r.amount - r.bet)}</span></div>`;
     }
     const actions = el('div', 'actions');
     const again = el('button', undefined, 'Play again');
@@ -201,11 +203,11 @@ export class Hud {
         </ul>
         <h3>What you can dig up</h3>
         <ul>
-          <li>🐹 Mole: a small prize</li>
-          <li>🦫 Groundhog: a third of your bet and up</li>
-          <li>💎 Buried treasure: your whole bet and up</li>
-          <li>🏛️ Aqueduct: multiplies your whole prize x2 to x25</li>
-          <li>🛢️ Oil seep: can strike on any safe shot. x50, x75 or x100 on the whole prize. Legendary.</li>
+          <li>${icon('mole')} Mole: a small prize</li>
+          <li>${icon('groundhog')} Groundhog: a third of your bet and up</li>
+          <li>${icon('treasure')} Buried treasure: your whole bet and up</li>
+          <li>${icon('aqueduct')} Aqueduct: multiplies your whole prize x2 to x25</li>
+          <li>${icon('oil')} Oil seep: can strike on any safe shot. x50, x75 or x100 on the whole prize. Legendary.</li>
         </ul>
         <h3>The fairness bit</h3>
         <p>Behind the scenes each payout is priced from the exact mine probability of the square you hit, so no amount of clever counting beats the house edge. Whatever you do, the game returns ${(RTP * 100).toFixed(0)}% on average. Reading the numbers changes how risky your ride is, not the odds.</p>

@@ -10,15 +10,16 @@ import { Slingshot } from './scene/slingshot';
 import { ease } from './scene/tween';
 import { Yard } from './scene/yard';
 import { Hud } from './ui/hud';
+import { icon, type IconName } from './ui/icons';
 import { Wallet } from './ui/wallet';
 
-const ITEM_EMOJI: Record<ItemType, string> = {
-  nothing: '🕳️',
-  mole: '🐹',
-  groundhog: '🦫',
-  treasure: '💎',
-  aqueduct: '🏛️',
-  oil: '🛢️',
+const ITEM_ICON: Record<ItemType, IconName> = {
+  nothing: 'hole',
+  mole: 'mole',
+  groundhog: 'groundhog',
+  treasure: 'treasure',
+  aqueduct: 'aqueduct',
+  oil: 'oil',
 };
 
 /** ?seed=<hex> replays a specific backyard (the round number shown under the prize). */
@@ -118,7 +119,7 @@ export class App {
   }
 
   private showLobbyYard() {
-    const preview = new Game({ layout: this.pickLayout(), ammo: { id: 'firecracker', name: '', bet: 0, blurb: '', emoji: '' } });
+    const preview = new Game({ layout: this.pickLayout(), ammo: { id: 'firecracker', name: '', bet: 0, blurb: '', icon: 'firecracker' } });
     this.buildYard(preview);
   }
 
@@ -255,13 +256,22 @@ export class App {
     const isRocket = g.ammo.id === 'icbm';
     if (isRocket) this.sfx.whistle(duration);
     const prev = p0.clone();
+    let smokeClock = 0;
     await this.sm.tweens.run(
       duration,
-      (t) => {
+      (t, dt) => {
         const p = this.arcPoint(p0, p2, t);
         if (isRocket) {
           const dir = p.clone().sub(prev);
           if (dir.lengthSq() > 1e-8) projectile.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+          // bright exhaust trail: puffs spawn at the tail, swell and drift up
+          smokeClock += dt;
+          if (smokeClock > 0.012) {
+            smokeClock = 0;
+            const tail = p.clone().addScaledVector(dir.lengthSq() > 1e-8 ? dir.normalize() : new THREE.Vector3(0, -1, 0), -0.14);
+            this.sm.smoke.burst({ position: tail, count: 3, colors: [0xffffff, 0xf1f4fb, 0xdde4f2], speed: [0.1, 0.45], spread: 1, gravity: -0.35, drag: 1.8, life: [0.45, 0.9], size: [0.025, 0.045], grow: 2.2, fade: true });
+            this.sm.particles.burst({ position: tail, count: 1, colors: [0xffa322, 0xffe066], speed: [0.5, 1.5], spread: 0.6, gravity: 0, drag: 3, life: [0.1, 0.25], size: [0.03, 0.06], fade: true });
+          }
           prev.copy(p);
         } else {
           projectile.rotation.x += 0.25;
@@ -289,7 +299,7 @@ export class App {
     switch (res.kind) {
       case 'dead':
         this.effects.burnMark(yard, res.index, g.ammo.id);
-        this.hud.toast(res.cell === 'tree' ? '🌳 Ouch, the tree. Nothing under it.' : '🪨 Solid rock. Nothing under it.', 'info', 1.6);
+        this.hud.toast(res.cell === 'tree' ? `${icon('tree')} Ouch, the tree. Nothing under it.` : `${icon('rock')} Solid rock. Nothing under it.`, 'info', 1.6);
         return;
       case 'already':
         this.effects.dud(hit);
@@ -320,7 +330,7 @@ export class App {
         this.toastFor(res);
         if (res.autoCashout) {
           await this.sm.tweens.delay(1.2);
-          this.hud.toast('🏡 Backyard cleared! Paying out.', 'win');
+          this.hud.toast(`${icon('home')} Backyard cleared! Paying out.`, 'win');
           this.finishCashout();
         }
         return;
@@ -329,7 +339,7 @@ export class App {
   }
 
   private toastFor(res: Extract<ShotResult, { kind: 'safe' }>) {
-    const em = ITEM_EMOJI[res.item];
+    const em = icon(ITEM_ICON[res.item]);
     switch (res.item) {
       case 'nothing':
         this.hud.toast(`${em} Nothing here. Safe, but free info only.`, 'info', 1.8);
@@ -343,8 +353,8 @@ export class App {
       default:
         this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! +${formatMoney(res.gain)}`, 'win');
     }
-    if (res.cascade.length) this.hud.toast(`🔎 ${res.cascade.length} square${res.cascade.length === 1 ? '' : 's'} proven safe, opened for free.`, 'info', 2.2);
-    if (res.flagged.length) this.hud.toast(`🚩 ${res.flagged.length} mine${res.flagged.length === 1 ? '' : 's'} proven and defused.`, 'info', 2.2);
+    if (res.cascade.length) this.hud.toast(`${icon('search')} ${res.cascade.length} square${res.cascade.length === 1 ? '' : 's'} proven safe, opened for free.`, 'info', 2.2);
+    if (res.flagged.length) this.hud.toast(`${icon('flag')} ${res.flagged.length} mine${res.flagged.length === 1 ? '' : 's'} proven and defused.`, 'info', 2.2);
   }
 
   private cashOut() {

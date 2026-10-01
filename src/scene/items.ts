@@ -1,6 +1,42 @@
 import * as THREE from 'three';
 import type { AmmoId } from '../engine/config';
 
+let envMap: THREE.Texture | null = null;
+/** Environment reflections for chrome materials; set once by the scene. */
+export function setEnvMap(tex: THREE.Texture) {
+  envMap = tex;
+}
+
+let discoTex: THREE.Texture | null = null;
+/** Grid of mirror tiles with dark grout and random glints. */
+function discoTexture(): THREE.Texture {
+  if (discoTex) return discoTex;
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 256;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#20222a';
+  ctx.fillRect(0, 0, c.width, c.height);
+  const tile = 32;
+  for (let y = 0; y < c.height; y += tile) {
+    for (let x = 0; x < c.width; x += tile) {
+      const l = 190 + Math.floor(Math.random() * 60);
+      ctx.fillStyle = `rgb(${l - 8}, ${l - 2}, ${l + 10})`;
+      ctx.fillRect(x + 2, y + 2, tile - 4, tile - 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillRect(x + 4, y + 4, tile - 8, 5);
+      if (Math.random() < 0.18) {
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillRect(x + 2, y + 2, tile - 4, tile - 4);
+      }
+    }
+  }
+  discoTex = new THREE.CanvasTexture(c);
+  discoTex.colorSpace = THREE.SRGBColorSpace;
+  discoTex.anisotropy = 4;
+  return discoTex;
+}
+
 const std = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
 
@@ -233,11 +269,22 @@ export function makeAmmo(id: AmmoId): THREE.Group {
       break;
     }
     case 'disco': {
-      const mirror = new THREE.MeshStandardMaterial({ color: 0xe6e6f4, metalness: 0.45, roughness: 0.2, flatShading: true, emissive: 0x7a3fb8, emissiveIntensity: 0.25 });
-      g.add(mesh(new THREE.IcosahedronGeometry(0.11, 1), mirror));
-      const fuse = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 5), std(0x333333), 0, 0.14, 0);
+      const chrome = new THREE.MeshStandardMaterial({
+        map: discoTexture(),
+        color: 0xffffff,
+        metalness: 0.95,
+        roughness: 0.08,
+        envMap,
+        envMapIntensity: 1.4,
+      });
+      const ball = mesh(new THREE.SphereGeometry(0.12, 28, 20), chrome);
+      ball.name = 'ball';
+      g.add(ball);
+      // hanging loop + fuse on top
+      g.add(mesh(new THREE.TorusGeometry(0.02, 0.006, 6, 12), std(0xcccccc, { metalness: 0.8, roughness: 0.3 }), 0, 0.135, 0));
+      const fuse = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 5), std(0x333333), 0, 0.18, 0);
       g.add(fuse);
-      const spark = mesh(new THREE.SphereGeometry(0.02, 6, 6), std(0xff66ff, { emissive: 0xff33ff, emissiveIntensity: 3 }), 0, 0.18, 0);
+      const spark = mesh(new THREE.SphereGeometry(0.02, 6, 6), std(0xff66ff, { emissive: 0xff33ff, emissiveIntensity: 3 }), 0, 0.22, 0);
       spark.name = 'spark';
       g.add(spark);
       break;

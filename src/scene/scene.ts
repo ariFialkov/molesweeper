@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { setEnvMap } from './items';
 import { Particles } from './particles';
 import { Tweens } from './tween';
 
@@ -9,6 +11,8 @@ export class SceneManager {
   readonly camera: THREE.PerspectiveCamera;
   readonly tweens = new Tweens();
   readonly particles: Particles;
+  /** soft round puffs for smoke trails */
+  readonly smoke: Particles;
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
   private timer = new THREE.Timer();
@@ -52,6 +56,16 @@ export class SceneManager {
     this.scene.add(this.sun.target);
 
     this.particles = new Particles(this.scene);
+    this.smoke = new Particles(
+      this.scene,
+      400,
+      new THREE.SphereGeometry(1, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, emissive: 0xe4ebff, emissiveIntensity: 0.6, transparent: true, opacity: 0.6, depthWrite: false }),
+    );
+    // reflections for chrome (the disco ball)
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    setEnvMap(pmrem.fromScene(new RoomEnvironment(), 0.04).texture);
+    pmrem.dispose();
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -172,6 +186,7 @@ export class SceneManager {
       const dt = Math.min(0.05, this.timer.getDelta());
       this.tweens.update(dt);
       this.particles.update(dt);
+      this.smoke.update(dt);
       for (const u of this.updaters) u(dt);
       if (this.shake > 0.001) {
         this.shakeTime += dt;
