@@ -6,7 +6,8 @@
   "description": "Molesweeper - a casual 3D minesweeper-meets-whack-a-mole stepper betting game (PWA)",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build": "tsc --noEmit -p tsconfig.json && MOLESWEEPER_PWA=off vite build",
+    "build:pwa": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
     "sim": "tsx scripts/simulate.ts",

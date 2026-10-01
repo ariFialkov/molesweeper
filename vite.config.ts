@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// MOLESWEEPER_PWA=off builds a plain static site (no manifest, no service worker) for hosts
+// that only accept standard WebGL build files. The default `npm run build` uses that mode;
+// `npm run build:pwa` produces the installable PWA.
+const pwaOff = process.env.MOLESWEEPER_PWA === 'off';
+
 export default defineConfig({
   base: './',
   plugins: [
     VitePWA({
+      disable: pwaOff,
       registerType: 'autoUpdate',
+      manifestFilename: 'manifest.json',
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {
         name: 'Molesweeper',

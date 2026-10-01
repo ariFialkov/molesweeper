@@ -6,7 +6,9 @@ backyard, blow squares open, dig up moles and treasure, and cash out before you 
 
 - **Engine:** TypeScript, no framework. Exact-probability solver, deterministic seeded rounds.
 - **Scene:** Three.js. Procedural models and textures only, no asset downloads, works offline.
-- **PWA:** `vite-plugin-pwa` precaches everything; add to home screen on iOS/Android or install on desktop.
+- **PWA:** `npm run build:pwa` adds a manifest and a precaching service worker (add to home screen on
+  iOS/Android, install on desktop). The plain `npm run build` is a static WebGL site for hosts that only
+  accept standard build files.
 - **Audio:** synthesized with the Web Audio API (pop, flak, mushroom cloud rumble, disco jingle).
 
 **Play it:** https://arifialkov.github.io/molesweeper/ (deployed by `.github/workflows/pages.yml` on every push).
@@ -16,7 +18,8 @@ backyard, blow squares open, dig up moles and treasure, and cash out before you 
 ```bash
 npm install
 npm run dev        # dev server on your LAN, open it on your phone too
-npm run build      # typecheck + production build into dist/ (includes sw.js + manifest)
+npm run build      # typecheck + static production build into dist/ (html, js, css, png only)
+npm run build:pwa  # same, plus the web manifest and service worker for an installable PWA
 npm run preview    # serve dist/
 npm test           # engine tests (solver vs brute force, exact-RTP proofs)
 npm run sim        # Monte Carlo on the production board, prints RTP per strategy
