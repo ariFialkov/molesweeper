@@ -29,9 +29,6 @@ export const MINES_MAX = 7;
  */
 export const NUMBER_SHOW_CHANCE = 0.25;
 
-/** Chance that a worthless ("nothing") reveal is a secret grave. Max one per backyard. */
-export const GRAVE_CHANCE = 0.1;
-
 export type AmmoId = 'firecracker' | 'grenade' | 'icbm' | 'disco';
 
 export interface AmmoDef {
@@ -49,7 +46,7 @@ export const AMMO: AmmoDef[] = [
   { id: 'disco', name: 'Disco Bomb', bet: 50, blurb: 'Confetti, the mole dances', emoji: '🪩' },
 ];
 
-export type ItemType = 'nothing' | 'grave' | 'mole' | 'groundhog' | 'treasure' | 'aqueduct' | 'oil';
+export type ItemType = 'nothing' | 'mole' | 'groundhog' | 'treasure' | 'aqueduct' | 'oil';
 
 /**
  * Item "skins" are chosen by what the fair payout for that shot turned out to be.
@@ -86,7 +83,6 @@ export function oilShave(chance: number, expectedMultiplier = oilExpectedMultipl
 
 export const ITEM_LABEL: Record<ItemType, string> = {
   nothing: 'Nothing here',
-  grave: 'Secret grave',
   mole: 'Mole',
   groundhog: 'Groundhog',
   treasure: 'Buried treasure',

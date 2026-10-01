@@ -98,27 +98,3 @@ export function burnTexture(): THREE.Texture {
   burnTex.colorSpace = THREE.SRGBColorSpace;
   return burnTex;
 }
-
-let bandageTex: THREE.Texture | null = null;
-export function bandageTexture(): THREE.Texture {
-  if (bandageTex) return bandageTex;
-  const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 64;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#e9e2cf';
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.strokeStyle = 'rgba(120,100,70,0.6)';
-  ctx.lineWidth = 3;
-  for (let i = -64; i < 128; i += 12) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i + 40, 64);
-    ctx.stroke();
-  }
-  bandageTex = new THREE.CanvasTexture(c);
-  bandageTex.colorSpace = THREE.SRGBColorSpace;
-  bandageTex.wrapS = bandageTex.wrapT = THREE.RepeatWrapping;
-  bandageTex.repeat.set(2, 3);
-  return bandageTex;
-}

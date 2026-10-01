@@ -206,10 +206,6 @@ button.cash:disabled {
   border-color: rgba(255, 92, 92, 0.6);
   color: #ffb3b3;
 }
-.toast.grave {
-  color: #cfd8dc;
-  font-style: italic;
-}
 @keyframes toast-in {
   from {
     opacity: 0;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Sfx } from '../audio/sfx';
 import { ITEM_LABEL, type AmmoId, type ItemType } from '../engine/config';
 import { formatFactor, formatMoney } from '../engine/game';
-import { disposeObject, makeCoffin, makeGroundhog, makeMine, makeMole, makeMummy, makePuddle, makeTreasure } from './items';
+import { disposeObject, makeGroundhog, makeMine, makeMole, makePuddle, makeTreasure } from './items';
 import type { SceneManager } from './scene';
 import { burnTexture, makeLabel } from './text';
 import { ease } from './tween';
@@ -143,7 +143,6 @@ export class Effects {
         this.sfx.disco();
         this.fireball(p, 0.5, 0xff8de0, 0.3);
         this.particles.burst({ position: p, count: 180, colors: CONFETTI, speed: [3, 8], direction: new THREE.Vector3(0, 1, 0), spread: 0.6, gravity: 3.5, drag: 1.4, life: [1.5, 2.8], size: [0.07, 0.12], flat: true, fade: true });
-        this.discoLights(2.6);
         this.sm.addShake(0.06);
         break;
     }
@@ -185,25 +184,6 @@ export class Effects {
     this.smokePuffs(pos, 8, 0.9, 2, true);
   }
 
-  private discoLights(duration: number) {
-    const hemi = this.sm.hemi;
-    const sun = this.sm.sun;
-    const baseHemi = hemi.color.clone();
-    const baseSun = sun.color.clone();
-    const palette = [0xff3b8d, 0x3bf0ff, 0xffe600, 0x9d4dff, 0x2eff7a];
-    this.tw.loop((_dt, elapsed) => {
-      if (elapsed > duration) {
-        hemi.color.copy(baseHemi);
-        sun.color.copy(baseSun);
-        return false;
-      }
-      const i = Math.floor(elapsed * 6) % palette.length;
-      hemi.color.setHex(palette[i]!).lerp(baseHemi, 0.35);
-      sun.color.setHex(palette[(i + 2) % palette.length]!).lerp(baseSun, 0.5);
-      return true;
-    });
-  }
-
   /** Blow the square open: turf and soil fly, a crater appears, then the number (if any) fades in. */
   async openCrater(yard: Yard, index: number, number: number | null, big = false): Promise<void> {
     const pos = yard.cellPosition(index);
@@ -238,10 +218,9 @@ export class Effects {
   }
 
   /** Squares the numbers proved safe: opened for free, one after another. */
-  async autoOpen(yard: Yard, cells: { index: number; number: number; shown: boolean; grave: boolean }[]): Promise<void> {
+  async autoOpen(yard: Yard, cells: { index: number; number: number; shown: boolean }[]): Promise<void> {
     for (const c of cells) {
       void this.openCrater(yard, c.index, c.shown ? c.number : null);
-      if (c.grave) void this.tw.delay(0.3).then(() => this.graveSequence(yard, c.index));
       await this.tw.delay(0.07);
     }
   }
@@ -302,10 +281,6 @@ export class Effects {
         obj = makePuddle(oil);
         break;
       }
-      case 'grave':
-        await this.graveSequence(yard, index);
-        if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
-        return;
       case 'nothing':
         this.floatingText(pos, 'Nothing', { color: '#d8d0c0', size: 0.5, duration: 1.2 });
         if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
@@ -313,6 +288,11 @@ export class Effects {
     }
     yard.placeItem(index, obj);
     const puddle = item === 'aqueduct' || item === 'oil';
+    // critters and chests stay on the board; if the square has a number they sit at the back rim of the crater
+    if (!puddle && numberAfter !== null) {
+      obj.position.z -= 0.27;
+      obj.scale.setScalar(0.01);
+    }
     obj.scale.setScalar(0.01);
     obj.position.y = puddle ? 0.1 : -0.3;
     if (item === 'mole' || item === 'groundhog') this.sfx.squeak();
@@ -321,10 +301,11 @@ export class Effects {
     if (item === 'oil') this.sfx.jackpot();
     const finalY = 0.1;
     const o = obj;
+    const popScale = !puddle && numberAfter !== null ? 0.88 : 1;
     void this.tw.run(
       puddle ? 0.7 : 0.45,
       (k) => {
-        o.scale.setScalar(k);
+        o.scale.setScalar(k * popScale);
         if (!puddle) o.position.y = -0.3 + (finalY + 0.3) * k;
       },
       puddle ? ease.outCubic : ease.outBack,
@@ -356,17 +337,19 @@ export class Effects {
     if (item === 'treasure') {
       this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.4, 0)), count: 40, colors: [0xffd23f, 0xfff3a0, 0xffffff], speed: [1.5, 4], spread: 0.8, gravity: 5, life: [0.5, 1.2], size: [0.03, 0.07] });
     }
-    let linger = 2.6;
     if (ammo === 'disco' && (item === 'mole' || item === 'groundhog')) {
       await this.tw.delay(0.45);
       this.dance(o, 2.4);
-      linger = 2.6;
     }
-    if (item === 'aqueduct') linger = 3.2;
-    if (item === 'oil') linger = 5;
-    await this.tw.delay(linger);
-    await this.leave(yard, index, o, item);
-    if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
+    if (puddle) {
+      // liquids drain away after a while, and only then can the number show
+      await this.tw.delay(item === 'oil' ? 5 : 3.2);
+      await this.leave(yard, index, o);
+      if (numberAfter !== null) this.showNumber(yard, index, numberAfter);
+    } else if (numberAfter !== null) {
+      await this.tw.delay(0.5);
+      this.showNumber(yard, index, numberAfter);
+    }
   }
 
   /** A column of water or oil erupts from the crater, hangs, then rains down. */
@@ -421,57 +404,34 @@ export class Effects {
     this.sfx.dirt();
   }
 
-  /** The prize goes back where it came from. */
-  private async leave(yard: Yard, index: number, obj: THREE.Group, item: ItemType): Promise<void> {
-    const pos = yard.cellPosition(index);
-    const y0 = obj.position.y;
-    if (item === 'mole' || item === 'groundhog') {
-      this.sfx.squeak();
-      // a little look around, then dive
-      await this.tw.run(0.35, (k) => (obj.rotation.y = Math.sin(k * Math.PI * 2) * 0.6));
-      this.sfx.dirt();
-      this.particles.burst({ position: pos, count: 18, colors: DIRT, speed: [1, 3], direction: new THREE.Vector3(0, 1, 0), spread: 0.7, gravity: 12, life: [0.3, 0.7], size: [0.03, 0.07] });
-      await this.tw.run(
-        0.35,
-        (k) => {
-          obj.position.y = y0 - 0.9 * k;
-          obj.scale.set(1 + k * 0.2, 1 - k * 0.3, 1 + k * 0.2);
-        },
-        ease.inQuad,
-      );
-    } else if (item === 'aqueduct' || item === 'oil') {
-      // the puddle soaks into the ground
-      await this.tw.run(0.9, (k) => {
-        obj.scale.set(1 - k * 0.9, 1 - k, 1 - k * 0.9);
-        setOpacity(obj, 1 - k);
-      });
-    } else {
-      // the chest sinks back into the ground
-      this.sfx.thud();
-      this.particles.burst({ position: pos, count: 14, colors: DIRT, speed: [0.8, 2], direction: new THREE.Vector3(0, 1, 0), spread: 0.8, gravity: 12, life: [0.3, 0.6], size: [0.03, 0.06] });
-      await this.tw.run(0.6, (k) => (obj.position.y = y0 - 0.9 * k), ease.inQuad);
-    }
-    yard.clearItem(index);
-  }
-
   /** The mole gets down. */
   dance(obj: THREE.Object3D, duration: number) {
     const baseY = obj.position.y;
+    const base = obj.scale.x;
     this.tw.loop((_dt, el) => {
       if (!obj.parent) return false;
       if (el > duration) {
         obj.rotation.set(0, 0, 0);
         obj.position.y = baseY;
-        obj.scale.setScalar(1);
+        obj.scale.setScalar(base);
         return false;
       }
       const beat = el * (128 / 60) * Math.PI;
       obj.position.y = baseY + Math.abs(Math.sin(beat)) * 0.25;
       obj.rotation.y = Math.sin(beat / 2) * 0.9;
       obj.rotation.z = Math.sin(beat) * 0.25;
-      obj.scale.set(1 + Math.sin(beat) * 0.1, 1 - Math.sin(beat) * 0.1, 1 + Math.sin(beat) * 0.1);
+      obj.scale.set(base * (1 + Math.sin(beat) * 0.1), base * (1 - Math.sin(beat) * 0.1), base * (1 + Math.sin(beat) * 0.1));
       return true;
     });
+  }
+
+  /** The puddle soaks into the ground. */
+  private async leave(yard: Yard, index: number, obj: THREE.Group): Promise<void> {
+    await this.tw.run(0.9, (k) => {
+      obj.scale.set(1 - k * 0.9, 1 - k, 1 - k * 0.9);
+      setOpacity(obj, 1 - k);
+    });
+    yard.clearItem(index);
   }
 
   /** Mine: it pops up, blinks, and takes the yard with it. */
@@ -505,84 +465,6 @@ export class Effects {
     const t = yard.tile(index);
     if (t.crater) (t.crater.material as THREE.MeshStandardMaterial).color.setHex(0x120c08);
     await this.tw.delay(0.9);
-  }
-
-  /** Coffin bursts, mummy flies, lands in a heap and fades. */
-  private async graveSequence(yard: Yard, index: number): Promise<void> {
-    const pos = yard.cellPosition(index);
-    const { group, lid, box } = makeCoffin();
-    yard.placeItem(index, group);
-    group.position.y = -0.25;
-    this.sfx.spooky();
-    await this.tw.run(0.5, (k) => (group.position.y = -0.25 + 0.35 * k), ease.outCubic);
-    await this.tw.delay(0.25);
-    // lid flies off, box splinters
-    this.sfx.flak();
-    this.sm.addShake(0.15);
-    this.particles.burst({ position: pos.clone().add(new THREE.Vector3(0, 0.3, 0)), count: 70, colors: WOOD, speed: [3, 8], direction: new THREE.Vector3(0, 1, 0), spread: 0.6, gravity: 12, life: [0.8, 1.6], size: [0.05, 0.14], flat: true });
-    this.smokePuffs(pos, 4, 0.6, 1);
-    box.visible = false;
-    const lidVel = new THREE.Vector3((Math.random() - 0.5) * 3, 7, (Math.random() - 0.5) * 3);
-    const lidSpin = new THREE.Vector3(6, 2, 4);
-    this.tw.loop((dt) => {
-      lidVel.y -= 14 * dt;
-      lid.position.addScaledVector(lidVel, dt);
-      lid.rotation.x += lidSpin.x * dt;
-      lid.rotation.z += lidSpin.z * dt;
-      if (lid.position.y < -0.05) {
-        lid.position.y = -0.05;
-        return false;
-      }
-      return true;
-    });
-    const mummy = makeMummy();
-    mummy.position.copy(pos).setY(0.05);
-    this.scene.add(mummy);
-    const vel = new THREE.Vector3((Math.random() - 0.5) * 2.5, 8.5 + Math.random() * 1.5, (Math.random() - 0.5) * 2.5);
-    const spin = new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 8);
-    const limbs = mummy.children.filter((c) => c.name === 'limb');
-    let landed = false;
-    let bounces = 0;
-    await new Promise<void>((resolve) => {
-      this.tw.loop((dt, el) => {
-        if (!landed) {
-          vel.y -= 16 * dt;
-          mummy.position.addScaledVector(vel, dt);
-          mummy.rotation.x += spin.x * dt;
-          mummy.rotation.y += spin.y * dt;
-          mummy.rotation.z += spin.z * dt;
-          limbs.forEach((l, i) => (l.rotation.x = Math.sin(el * 14 + i) * 1.2));
-          if (mummy.position.y < 0.15 && vel.y < 0) {
-            bounces++;
-            this.sfx.thud();
-            this.particles.burst({ position: mummy.position.clone(), count: 15, colors: DIRT, speed: [1, 3], spread: 0.7, gravity: 12, life: [0.3, 0.7], size: [0.03, 0.07] });
-            if (bounces >= 2) {
-              landed = true;
-              mummy.position.y = 0.15;
-              mummy.rotation.set(Math.PI / 2 + (Math.random() - 0.5) * 0.6, mummy.rotation.y, (Math.random() - 0.5) * 0.5);
-              limbs.forEach((l) => (l.rotation.x = (Math.random() - 0.5) * 1.5));
-              resolve();
-              return false;
-            }
-            vel.y = Math.abs(vel.y) * 0.35;
-            vel.x *= 0.5;
-            vel.z *= 0.5;
-            spin.multiplyScalar(0.4);
-          }
-        }
-        return true;
-      });
-    });
-    this.floatingText(pos, 'Secret grave', { sub: "we're just gonna ignore this one · +$0.00", color: '#cfd8dc', size: 0.7, duration: 3 });
-    await this.tw.delay(1.6);
-    await this.tw.run(1.2, (k) => {
-      setOpacity(mummy, 1 - k);
-      setOpacity(lid, 1 - k);
-    });
-    mummy.removeFromParent();
-    disposeObject(mummy);
-    group.removeFromParent();
-    disposeObject(group);
   }
 
   /** A scorch mark on a tree or rock near the impact point, fading away. */

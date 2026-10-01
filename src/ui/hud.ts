@@ -157,7 +157,7 @@ export class Hud {
     if (hint) hint.textContent = v.shots === 0 ? 'Drag to pull back the slingshot, release to fire. Numbers count the mines around a square.' : 'Numbers hint at where the mines are. Cash out any time.';
   }
 
-  toast(text: string, kind: 'win' | 'bad' | 'grave' | 'info' = 'info', life = 2.4) {
+  toast(text: string, kind: 'win' | 'bad' | 'info' = 'info', life = 2.4) {
     const t = el('div', `toast ${kind}`, text);
     t.style.setProperty('--life', `${life}s`);
     this.toasts.append(t);
@@ -194,7 +194,7 @@ export class Hud {
         <p>Pick your ammo (that's your bet), then slingshot it into the backyard. Every square you blow open either adds to your prize or is a mine that ends the round. Cash out whenever you like.</p>
         <h3>Reading the dirt</h3>
         <ul>
-          <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. Prizes usually churn the dirt too much to leave a number; once a critter burrows off you'll sometimes find one underneath.</li>
+          <li>A number pressed into a crater counts the mines in the 8 squares around it, like minesweeper. Prizes usually churn the dirt too much to leave one readable.</li>
           <li>You never have to do the maths: whenever the numbers prove a square safe, the game opens it for free (worth nothing), and whenever they prove a mine, the game digs it up and flags it. Everything left is a genuine gamble.</li>
           <li>Trees and rocks are dead squares. They never hide mines and never count.</li>
           <li>Squares next to high numbers are more likely to be mines. If one turns out safe anyway, it pays more.</li>
@@ -206,7 +206,6 @@ export class Hud {
           <li>💎 Buried treasure: your whole bet and up</li>
           <li>🏛️ Aqueduct: multiplies your whole prize x2 to x25</li>
           <li>🛢️ Oil seep: can strike on any safe shot. x50, x75 or x100 on the whole prize. Legendary.</li>
-          <li>⚰️ Secret grave: worth nothing, but worth seeing.</li>
         </ul>
         <h3>The fairness bit</h3>
         <p>Behind the scenes each payout is priced from the exact mine probability of the square you hit, so no amount of clever counting beats the house edge. Whatever you do, the game returns ${(RTP * 100).toFixed(0)}% on average. Reading the numbers changes how risky your ride is, not the odds.</p>

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { AmmoId } from '../engine/config';
-import { bandageTexture } from './text';
 
 const std = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05, ...extra });
@@ -151,40 +150,6 @@ export function makeFlag(): THREE.Group {
   return g;
 }
 
-/** Coffin (lid separate so it can fly off). */
-export function makeCoffin(): { group: THREE.Group; lid: THREE.Mesh; box: THREE.Mesh } {
-  const group = new THREE.Group();
-  const wood = std(0x4a2f1c, { roughness: 0.9 });
-  const box = mesh(new THREE.BoxGeometry(0.34, 0.2, 0.7), wood, 0, 0.1, 0);
-  const lid = mesh(new THREE.BoxGeometry(0.36, 0.06, 0.72), std(0x5d3b22), 0, 0.23, 0);
-  const cross = std(0xd8d0c0);
-  lid.add(mesh(new THREE.BoxGeometry(0.05, 0.02, 0.3), cross, 0, 0.04, 0.02));
-  lid.add(mesh(new THREE.BoxGeometry(0.18, 0.02, 0.05), cross, 0, 0.04, -0.06));
-  group.add(box, lid);
-  return { group, lid, box };
-}
-
-/** Mummy: a wrapped body with a few segments so it can flop around. */
-export function makeMummy(): THREE.Group {
-  const g = new THREE.Group();
-  const wrap = new THREE.MeshStandardMaterial({ map: bandageTexture(), roughness: 0.9 });
-  const torso = mesh(new THREE.CapsuleGeometry(0.11, 0.3, 4, 10), wrap, 0, 0.35, 0);
-  torso.name = 'torso';
-  const head = mesh(new THREE.SphereGeometry(0.1, 12, 10), wrap, 0, 0.62, 0);
-  const eyeMat = std(0x111111);
-  head.add(mesh(new THREE.SphereGeometry(0.02, 6, 6), eyeMat, -0.035, 0.02, 0.09), mesh(new THREE.SphereGeometry(0.02, 6, 6), eyeMat, 0.035, 0.02, 0.09));
-  const limb = new THREE.CapsuleGeometry(0.04, 0.22, 4, 8);
-  const la = mesh(limb, wrap, -0.15, 0.4, 0.05);
-  const ra = mesh(limb, wrap, 0.15, 0.4, 0.05);
-  const ll = mesh(limb, wrap, -0.06, 0.1, 0);
-  const rl = mesh(limb, wrap, 0.06, 0.1, 0);
-  la.name = ra.name = ll.name = rl.name = 'limb';
-  la.rotation.z = 0.9;
-  ra.rotation.z = -0.9;
-  g.add(torso, head, la, ra, ll, rl);
-  return g;
-}
-
 export function makeTree(rng: () => number): THREE.Group {
   const g = new THREE.Group();
   const trunk = std(0x6b4423, { roughness: 0.95 });
@@ -268,7 +233,7 @@ export function makeAmmo(id: AmmoId): THREE.Group {
       break;
     }
     case 'disco': {
-      const mirror = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1, roughness: 0.15, flatShading: true });
+      const mirror = new THREE.MeshStandardMaterial({ color: 0xe6e6f4, metalness: 0.45, roughness: 0.2, flatShading: true, emissive: 0x7a3fb8, emissiveIntensity: 0.25 });
       g.add(mesh(new THREE.IcosahedronGeometry(0.11, 1), mirror));
       const fuse = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.07, 5), std(0x333333), 0, 0.14, 0);
       g.add(fuse);

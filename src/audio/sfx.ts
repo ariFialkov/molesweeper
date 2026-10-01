@@ -158,12 +158,6 @@ export class Sfx {
     });
   }
 
-  spooky() {
-    this.tone(220, 'sawtooth', 0.12, 0.3, 0.9, 0, 110);
-    this.tone(330, 'sine', 0.08, 0.3, 1.2, 0.1, 165);
-    this.burst(0.2, 0.6, 800, 0.05);
-  }
-
   /** ~2.4s disco jingle */
   disco() {
     if (!this.ctx) return;

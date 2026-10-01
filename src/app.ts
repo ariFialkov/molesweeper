@@ -14,7 +14,6 @@ import { Wallet } from './ui/wallet';
 
 const ITEM_EMOJI: Record<ItemType, string> = {
   nothing: '🕳️',
-  grave: '⚰️',
   mole: '🐹',
   groundhog: '🦫',
   treasure: '💎',
@@ -335,9 +334,6 @@ export class App {
       case 'nothing':
         this.hud.toast(`${em} Nothing here. Safe, but free info only.`, 'info', 1.8);
         break;
-      case 'grave':
-        this.hud.toast(`${em} Secret grave: we're just gonna ignore this one. +$0.00`, 'grave', 3.5);
-        break;
       case 'aqueduct':
         this.hud.toast(`${em} ${ITEM_LABEL[res.item]}! Prize ${formatFactor(res.factor)} → ${formatMoney(res.totalAfter)}`, 'win', 3);
         break;
@@ -349,7 +345,6 @@ export class App {
     }
     if (res.cascade.length) this.hud.toast(`🔎 ${res.cascade.length} square${res.cascade.length === 1 ? '' : 's'} proven safe, opened for free.`, 'info', 2.2);
     if (res.flagged.length) this.hud.toast(`🚩 ${res.flagged.length} mine${res.flagged.length === 1 ? '' : 's'} proven and defused.`, 'info', 2.2);
-    if (res.cascade.some((c) => c.grave)) this.hud.toast(`⚰️ Secret grave: we're just gonna ignore this one. +$0.00`, 'grave', 3.5);
   }
 
   private cashOut() {

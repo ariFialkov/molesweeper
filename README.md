@@ -32,10 +32,9 @@ npm run icons      # regenerate the PWA icons (pure JS PNG writer)
    3–7 squares are trees or rocks (dead squares, never mines, never counted). 5–7 squares are mines.
 3. Press anywhere and drag to pull the slingshot, release to fire. Aiming is free: the shot lands
    where the reticle points and the closest square blows open.
-4. A safe hit blows a crater and the prize pops out. After a moment the prize leaves again (moles
-   burrow, chests sink) and about one square in four turns out to have a number pressed into the dirt
-   counting the mines in the 8 neighbours, exactly like minesweeper. Squares the game opens for free
-   always show their number.
+4. A safe hit blows a crater and the prize pops out and stays on the board. About one prize square in
+   four also has a number pressed into the dirt counting the mines in the 8 neighbours, exactly like
+   minesweeper. Squares the game opens for free always show their number.
 5. You never get to do the maths. Whenever the visible numbers prove a square safe, the game opens it
    for free (worth nothing); whenever they prove a mine, the game digs it up and plants a flag on it.
    Every square you can still hit is a genuine gamble, so the round can end on any shot.
@@ -50,10 +49,9 @@ What you can dig up (the skin is chosen by what the shot paid):
 | 💎 Buried treasure | adds 1× bet and up | about 5 % of safe shots, big pots |
 | 🏛️ Aqueduct | multiplies the prize ×2–×25 | squares with ≥ 50 % mine risk |
 | 🛢️ Oil seep | multiplies ×50 / ×75 / ×100 | a jackpot that can strike on any safe shot, ~1 round in 500 |
-| ⚰️ Secret grave | +$0.00, coffin bursts, mummy flies | 10 % of squares the game opens for free, max 1 per yard |
 | 🌳🪨 Trees & rocks | dead squares, burn mark on hit | 3–7 per yard |
 
-Disco bombs make the mole or groundhog dance to a short jingle. ICBMs leave a mushroom cloud.
+Disco bombs shower confetti and make the mole or groundhog dance to a short jingle. ICBMs leave a mushroom cloud.
 
 ## The math: minesweeper numbers *and* a fixed 96 % RTP
 
@@ -84,7 +82,7 @@ Consequences that shape the design:
   the player can see, so it leaks nothing and the pricing stays exact.
 - **Numbers on prize squares are a coin flip.** With every number shown, minesweeper boards are mostly
   deducible and the game would resolve a third of all yards by itself after a shot or two. A square
-  the player shoots therefore shows its number (after the prize has left) with probability
+  the player shoots therefore shows its number with probability
   `NUMBER_SHOW_CHANCE` (0.25); squares the game opens for free always do. The flip is seeded and never
   looks at the value, so a missing number carries no information; the solver simply treats that square
   as safe with an unknown count. `scripts/tune-numbers.ts` shows the trade-off.

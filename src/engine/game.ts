@@ -1,5 +1,5 @@
 import { generateBoard, type Board, type CellKind } from './board';
-import { GRAVE_CHANCE, ITEM_RULES, NUMBER_SHOW_CHANCE, OIL_SEEP, RTP, oilShave, type AmmoDef, type ItemType, type Layout } from './config';
+import { ITEM_RULES, NUMBER_SHOW_CHANCE, OIL_SEEP, RTP, oilShave, type AmmoDef, type ItemType, type Layout } from './config';
 import { mulberry32, randomSeed, type Rng } from './rng';
 import { solve } from './solver';
 
@@ -21,8 +21,6 @@ export interface CascadeReveal {
   number: number;
   /** false: the dirt is unreadable, the number is not shown */
   shown: boolean;
-  /** this free square happened to hold the secret grave */
-  grave: boolean;
 }
 
 export type ShotResult =
@@ -104,7 +102,6 @@ export class Game {
   /** ticket value (what a cash-out pays) */
   total: number;
   shots = 0;
-  graveUsed = false;
   probs: Float64Array;
   mineHit: number | null = null;
   readonly history: ShotResult[] = [];
@@ -256,11 +253,7 @@ export class Game {
     const factor = totalBefore > 0 ? totalAfter / totalBefore : 1;
     this.total = totalAfter;
 
-    let item: ItemType = oilMultiplier ? 'oil' : classifyItem(gain, factor, this.bet);
-    if (item === 'nothing' && !this.graveUsed && this.rng() < GRAVE_CHANCE) {
-      item = 'grave';
-      this.graveUsed = true;
-    }
+    const item: ItemType = oilMultiplier ? 'oil' : classifyItem(gain, factor, this.bet);
 
     this.open(index, true);
     const cascade: CascadeReveal[] = [];
@@ -320,12 +313,7 @@ export class Game {
         const p = this.probs[i]!;
         if (p <= 1e-12) {
           this.open(i, false);
-          let grave = false;
-          if (!this.graveUsed && this.rng() < GRAVE_CHANCE) {
-            grave = true;
-            this.graveUsed = true;
-          }
-          opened.push({ index: i, number: this.board.numbers[i]!, shown: this.shown[i]!, grave });
+          opened.push({ index: i, number: this.board.numbers[i]!, shown: this.shown[i]! });
           changed = true;
         } else if (p >= 1 - 1e-12) {
           this.flagged[i] = true;
